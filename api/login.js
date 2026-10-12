@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   }
 
   const SUPABASE_URL = "https://supabase.co";
-  const SUPABASE_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
+  const SUPABASE_URL = "https://supabase.co";
 
   // req.body güvenli şekilde kontrol ediliyor
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
