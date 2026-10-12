@@ -87,17 +87,12 @@ async function handleLogin() {
   
   const res = await apiRequest("https://script.google.com/macros/s/AKfycbx1QUIqVK_HpGGryDubNm4RmuQelhGbuDb71qX8GX5PiqtcVUjZtJtoIJ3jPg7XePZ7/exec");
   
-  if (res && res.ok) {
-    errorEl.innerText = "";
-    document.getElementById("authContainer").classList.add("view-hidden");
-    document.getElementById("appContainer").classList.remove("view-hidden");
-    document.getElementById("usernameDisplay").innerText = user;
-    
-    loadDashboardData();
-  } else {
-    errorEl.innerText = res.message || "Giriş başarısız.";
-    credentials = { username: "", password: "" };
-  }
+  const response = await fetch(BACKEND_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify(payload)
+    });
 }
 
 async function loadDashboardData() {
