@@ -67,20 +67,22 @@ async function handleLogin() {
     errorEl.innerText = "Veritabanına bağlanılıyor...";
     
     try {
-      // Test amaçlı harcamalar tablosundan veri çekmeyi deniyoruz
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/harcamalar?select=*`, {
-        method: "GET",
-        headers: {
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`
-        }
-      });
-      
-      if (response.ok) {
-        errorEl.innerText = "";
-        document.getElementById("authContainer").classList.add("view-hidden");
-        document.getElementById("appContainer").classList.remove("view-hidden");
-        document.getElementById("usernameDisplay").innerText = user;
+    const response = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "login", username: user, password: pass })
+    });
+    
+    const res = await response.json();
+    if (res && res.ok) {
+      errorEl.innerText = "";
+      document.getElementById("authContainer").classList.add("view-hidden");
+      document.getElementById("appContainer").classList.remove("view-hidden");
+      document.getElementById("usernameDisplay").innerText = user;
+    } else {
+      errorEl.innerText = "Giriş başarısız. Şifrenizi kontrol edin.";
+    }
+  }
       } else {
         errorEl.innerText = "Veritabanı bağlantı hatası. API anahtarını kontrol edin.";
       }
