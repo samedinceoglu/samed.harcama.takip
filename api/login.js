@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   }
 
   const SUPABASE_URL = "https://xolniwgjhoeuyrvyrkme.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
+  const SUPABASE_KEY = "SİZİN_GERÇEK_SUPABASE_ANON_KEYİNİZ";
 
   try {
     let body = req.body;
