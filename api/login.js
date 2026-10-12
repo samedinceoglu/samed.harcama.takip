@@ -10,9 +10,8 @@ export default async function handler(req, res) {
     return;
   }
 
-  const SUPABASE_URL = "https://supabase.co";
-  const SUPABASE_URL = "https://supabase.co";
-
+  
+const SUPABASE_URL = "https://supabase.co";
   // req.body güvenli şekilde kontrol ediliyor
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
   const { action, username, password, record, id } = body;
