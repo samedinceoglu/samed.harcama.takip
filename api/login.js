@@ -14,9 +14,9 @@ export default async function handler(req, res) {
   const GOOGLE_BACKEND_URL = "https://script.google.com/macros/s/AKfycbx1QUIqVK_HpGGryDubNm4RmuQelhGbuDb71qX8GX5PiqtcVUjZtJtoIJ3jPg7XePZ7/exec";
 
   try {
-    const response = await fetch(GOOGLE_BACKEND_URL, {
+    const SUPABASE_URL = "https://supabase.co";
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ" },
       body: JSON.stringify(req.body)
     });
     
