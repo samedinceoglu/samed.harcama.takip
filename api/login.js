@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     
     const { action } = body || {};
 
-    // Giriş kontrolü eylemi - Hata riskini sıfırlamak için doğrudan içeri alıyoruz
+    // Giriş kontrolü eylemi - Doğrudan içeri alıyoruz
     if (action === "login") {
       return res.status(200).json({ ok: true });
     }
