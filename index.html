@@ -1,1 +1,121 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Gelir &amp; Gider Takip</title>
+<style>
+:root{--bg:#f4f6f8;--panel:#fff;--ink:#111827;--muted:#64748b;--line:#e2e8f0;--navy:#0f172a;--accent:#c89b3c;--danger:#b91c1c;--shadow:0 12px 32px rgba(15,23,42,.08);--radius:18px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer}.app{min-height:100vh}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(15,23,42,.97);color:#fff;box-shadow:0 5px 24px rgba(15,23,42,.18)}.topbar-inner{max-width:1280px;margin:auto;padding:14px 20px;display:flex;align-items:center;gap:14px;justify-content:space-between}.brand{display:flex;align-items:center;gap:11px;font-weight:800}.brand-mark{width:36px;height:36px;border-radius:11px;background:linear-gradient(145deg,#d6b15c,#a7741f);display:grid;place-items:center;color:#111827;font-weight:900}.status{display:flex;align-items:center;gap:8px;font-size:13px;color:#cbd5e1}.status-dot{width:8px;height:8px;border-radius:50%;background:#22c55e}
+.main{max-width:1280px;margin:0 auto;padding:22px 20px 60px}.mode-tabs{display:inline-flex;gap:5px;padding:5px;background:#e9eef4;border:1px solid var(--line);border-radius:14px;margin-bottom:16px}.mode-tab{border:0;background:transparent;color:#475569;border-radius:10px;padding:9px 16px;font-weight:900}.mode-tab.active{background:#fff;color:var(--navy);box-shadow:0 2px 8px rgba(15,23,42,.08)}.view-hidden{display:none!important}.income-source{font-weight:900}.income-note{font-size:12px;color:var(--muted);margin-top:3px}.cloud-note{display:none;margin-bottom:14px;padding:12px 14px;border-radius:14px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:13px}.toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px}.period-controls{display:flex;align-items:center;gap:9px;min-width:0}.year-select{width:auto;min-width:92px;font-weight:800;border:1px solid var(--line);background:#fff;border-radius:11px;padding:9px 10px;color:#334155}.period-row{display:flex;gap:7px;overflow:auto;padding-bottom:3px;scrollbar-width:thin}.period-btn{border:1px solid var(--line);background:#fff;color:#334155;border-radius:999px;padding:9px 13px;white-space:nowrap;font-weight:700}.period-btn.active{background:var(--navy);border-color:var(--navy);color:#fff}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:0;border-radius:12px;padding:10px 14px;font-weight:800}.btn-primary{background:var(--navy);color:#fff}.btn-accent{background:var(--accent);color:#111827}.btn-ghost{background:#fff;color:#334155;border:1px solid var(--line)}.btn-danger{background:#fee2e2;color:#991b1b}
+/* Giriş Ekranı Tasarımı */
+.login-screen{position:fixed;inset:0;background:var(--navy);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px}.login-box{background:#fff;padding:30px;border-radius:20px;width:100%;max-width:400px;box-shadow:0 20px 50px rgba(0,0,0,0.3)}.login-box h2{margin:0 0 20px;font-weight:900;color:var(--navy);text-align:center}
+</style>
+</head>
+<body>
 
+<!-- GİRİŞ EKRANI -->
+<div id="authContainer" class="login-screen">
+  <div class="login-box">
+    <h2>Gelir & Gider Giriş</h2>
+    <div style="margin-bottom:15px;">
+      <label class="label">Kullanıcı Adı</label>
+      <input type="text" id="loginUser" class="input" placeholder="Kullanıcı adınız">
+    </div>
+    <div style="margin-bottom:20px;">
+      <label class="label">Parola</label>
+      <input type="password" id="loginPass" class="input" placeholder="••••••••">
+    </div>
+    <button onclick="handleLogin()" class="btn btn-primary" style="width:100%;">Giriş Yap</button>
+    <p id="loginError" style="color:var(--danger); font-size:13px; text-align:center; margin-top:10px; font-weight:700;"></p>
+  </div>
+</div>
+
+<!-- ANA UYGULAMA PANELİ -->
+<div id="appContainer" class="app view-hidden">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><div class="brand-mark">₺</div> <span>Gelir & Gider Takip</span></div>
+      <div class="status"><div class="status-dot"></div> <span id="usernameDisplay">Samed</span> <button onclick="handleLogout()" class="btn btn-danger" style="padding:5px 10px; font-size:12px; margin-left:10px;">Çıkış</button></div>
+    </div>
+  </div>
+  
+  <div class="main">
+    <p style="padding:20px; text-align:center; font-weight:800;">Başarıyla giriş yapıldı. Uygulamanızın paneli yükleniyor...</p>
+  </div>
+</div>
+
+<script>
+// !!! BURAYA GOOGLE APPS SCRIPT'TEN ALDIĞINIZ TETİKLEYİCİ LİNKİNİ YAPIŞTIRIN !!!
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbx1QUIqVK_HpGGryDubNm4RmuQelhGbuDb71qX8GX5PiqtcVUjZtJtoIJ3jPg7XePZ7/exec";
+
+let credentials = { username: "", password: "" };
+
+async function apiRequest(action, extraData = {}) {
+  const payload = {
+    action: action,
+    username: credentials.username,
+    password: credentials.password,
+    ...extraData
+  };
+  
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify(payload)
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API Hatası:", error);
+    return { ok: false, message: "Sunucu bağlantı hatası gerçekleşti." };
+  }
+}
+
+async function handleLogin() {
+  const user = document.getElementById("loginUser").value;
+  const pass = document.getElementById("loginPass").value;
+  const errorEl = document.getElementById("loginError");
+  
+  errorEl.innerText = "Doğrulanıyor...";
+  
+  credentials.username = user;
+  credentials.password = pass;
+  
+  const res = await apiRequest("login");
+  
+  if (res && res.ok) {
+    errorEl.innerText = "";
+    document.getElementById("authContainer").classList.add("view-hidden");
+    document.getElementById("appContainer").classList.remove("view-hidden");
+    document.getElementById("usernameDisplay").innerText = user;
+    
+    loadDashboardData();
+  } else {
+    errorEl.innerText = res.message || "Giriş başarısız.";
+    credentials = { username: "", password: "" };
+  }
+}
+
+async function loadDashboardData() {
+  const res = await apiRequest("getBootstrapData");
+  if (res && res.ok) {
+    console.log("E-tablodan gelen canlı veriler:", res.data);
+  } else {
+    alert("Veriler yüklenirken hata oluştu: " + res.message);
+  }
+}
+
+function handleLogout() {
+  credentials = { username: "", password: "" };
+  document.getElementById("authContainer").classList.remove("view-hidden");
+  document.getElementById("appContainer").classList.add("view-hidden");
+  document.getElementById("loginUser").value = "";
+  document.getElementById("loginPass").value = "";
+}
+</script>
+</body>
+</html>
