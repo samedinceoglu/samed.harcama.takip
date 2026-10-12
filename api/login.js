@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  // CORS güvenlik ayarları
+  // CORS başlıkları ayarı
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -10,13 +10,14 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Sizin güncel Supabase bağlantı bilgileriniz
   const SUPABASE_URL = "https://supabase.co";
   const SUPABASE_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
 
-  const { action, username, password, record, id } = req.body || {};
+  // req.body güvenli şekilde kontrol ediliyor
+  const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+  const { action, username, password, record, id } = body;
 
-  // 1. Basit Kullanıcı Giriş Kontrolü
+  // 1. Giriş Kontrolü Eylemi
   if (action === "login") {
     if (username === "Samed" && password !== "") {
       return res.status(200).json({ ok: true });
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, message: "Kullanıcı adı veya şifre hatalı." });
   }
 
-  // 2. Tablo Eşleştirme Mantığı
+  // 2. Modüle göre tablo belirleme
   let targetTable = "harcamalar";
   if (action && action.toLowerCase().includes("income")) targetTable = "gelirler";
   if (action && action.toLowerCase().includes("debt")) targetTable = "borclar";
@@ -33,28 +34,37 @@ export default async function handler(req, res) {
 
   try {
     let response;
-    
-    // VERİ ÇEKME İŞLEMİ (getBootstrapData)
+
+    // VERİ ÇEKME İŞLEMİ
     if (action === "getBootstrapData") {
       response = await fetch(`${SUPABASE_URL}/rest/v1/${targetTable}?select=*`, {
         method: "GET",
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        headers: { 
+          "apikey": SUPABASE_KEY, 
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Accept": "application/json"
+        }
       });
+      if (!response.ok) throw new Error("Supabase veri çekme hatası: " + response.statusText);
       const data = await response.json();
       return res.status(200).json({ ok: true, data: data });
     }
 
-    // VERİ SİLME İŞLEMLERİ
+    // VERİ SİLME İŞLEMİ
     if (action && action.startsWith("delete")) {
       response = await fetch(`${SUPABASE_URL}/rest/v1/${targetTable}?id=eq.${id}`, {
         method: "DELETE",
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=representation" }
+        headers: { 
+          "apikey": SUPABASE_KEY, 
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Prefer": "return=representation" 
+        }
       });
       const data = await response.json();
       return res.status(200).json({ ok: true, data: data });
     }
 
-    // VERİ KAYDETME / GÜNCELLEME İŞLEMLERİ
+    // VERİ KAYDETME İŞLEMİ
     response = await fetch(`${SUPABASE_URL}/rest/v1/${targetTable}`, {
       method: "POST",
       headers: { 
@@ -69,6 +79,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, data: data });
 
   } catch (error) {
-    return res.status(500).json({ ok: false, message: "Sunucu köprü hatası: " + error.message });
+    return res.status(500).json({ ok: false, message: error.message });
   }
 }
