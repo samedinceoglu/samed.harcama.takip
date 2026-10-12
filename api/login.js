@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
     // Sizin Gerçek Kullanıcı Adı ve Şifre Kontrolünüz
     if (action === "login") {
-      if (username === "Samed" && password === "Samed;0525") {
+      if (username === "Samed" && password === "Samed0525") {
         return res.status(200).json({ ok: true });
       }
       return res.status(401).json({ ok: false, message: "Kullanıcı adı veya şifre hatalı." });
