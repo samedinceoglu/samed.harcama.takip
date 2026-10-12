@@ -17,9 +17,17 @@ export default async function handler(req, res) {
       body = JSON.parse(body);
     }
     
-    const { action } = body || {};
+    const { action, username, password } = body || {};
 
-    // Hangi aksiyon gelirse gelsin, doğrudan harcamalar tablosuna yönlendiriyoruz
+    // Sizin Gerçek Kullanıcı Adı ve Şifre Kontrolünüz
+    if (action === "login") {
+      if (username === "Samed" && password === "Samed;0525") {
+        return res.status(200).json({ ok: true });
+      }
+      return res.status(401).json({ ok: false, message: "Kullanıcı adı veya şifre hatalı." });
+    }
+
+    // Doğrudan Harcamalar Tablosundan Canlı Verileri Çeken Bölüm
     const response = await fetch(`${SUPABASE_URL}/rest/v1/harcamalar?select=*`, {
       method: "GET",
       headers: { 
