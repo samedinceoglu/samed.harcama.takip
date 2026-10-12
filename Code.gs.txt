@@ -1,0 +1,588 @@
+/**
+ * Harcama Takip Uygulaması - Google Apps Script arka ucu
+ * Sürüm: 2026-09-24 - akıllı analiz + TCMB USD/EUR + etiketler
+ *
+ * Veriler kullanıcının Google Drive hesabında oluşturulan
+ * "Harcama Takip Veritabanı" adlı Google E-Tablosunda saklanır.
+ */
+
+const APP_DB_NAME = 'Harcama Takip Veritabanı';
+const APP_DOCS_FOLDER = 'Harcama Takip Belgeleri';
+const DB_PROP = 'HARCAMA_TAKIP_DB_ID';
+const DOCS_PROP = 'HARCAMA_TAKIP_DOCS_FOLDER_ID';
+const EXPENSE_VERSION_PROP = 'HARCAMA_TAKIP_EXPENSE_VERSION';
+
+// Ek giriş katmanı. Parola düz metin olarak saklanmaz; SHA-256 özeti kullanılır.
+const LOGIN_USERNAME = 'Samed';
+const LOGIN_PASSWORD_SHA256 = 'c3531b808fbd8ba67b871dc4190f827f5bf46ae79f81c388a6f483111ccb11c9';
+const LOGIN_MAX_FAILS = 5;
+const LOGIN_LOCK_SECONDS = 600;
+
+function sha256Hex_(value) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(value || ''), Utilities.Charset.UTF_8);
+  return bytes.map(b => ('0' + ((b < 0 ? b + 256 : b).toString(16))).slice(-2)).join('');
+}
+
+function verifyLogin(username, password) {
+  const cache = CacheService.getScriptCache();
+  const key = 'login_fail_' + sha256Hex_(String(username || '').trim()).slice(0, 16);
+  const fails = Number(cache.get(key) || 0);
+  if (fails >= LOGIN_MAX_FAILS) {
+    return {ok:false, locked:true, message:'Çok fazla hatalı deneme. 10 dakika sonra tekrar deneyin.'};
+  }
+  const userOk = String(username || '').trim() === LOGIN_USERNAME;
+  const passOk = sha256Hex_(password) === LOGIN_PASSWORD_SHA256;
+  if (userOk && passOk) {
+    cache.remove(key);
+    return {ok:true};
+  }
+  cache.put(key, String(fails + 1), LOGIN_LOCK_SECONDS);
+  return {ok:false, locked:false, message:'Kullanıcı adı veya parola hatalı.'};
+}
+
+const SCHEMAS = {
+  Harcamalar: [
+    'id','period','date','description','category','installments','installmentNumber','purchaseTotal',
+    'credit','money','world','bonus','wings','cash','tags','detail','sourceMonth','sourceRow','sourceFile','createdAt','updatedAt'
+  ],
+  Gelirler: ['id','period','date','source','amount','note','createdAt','updatedAt'],
+  Borclar: ['id','type','party','amount','startDate','dueDate','settledDate','paymentsJson','note','createdAt','updatedAt'],
+  YaklasanOdemeler: ['id','title','amount','dueDate','category','note','status','paidDate','linkedExpenseId','createdAt','updatedAt'],
+  VarlikBorc: ['id','type','name','category','amount','updatedDate','note','createdAt','updatedAt'],
+  Ayarlar: ['key','value'],
+  Belgeler: ['id','transactionId','fileId','fileName','mimeType','url','createdAt'],
+  Kurlar: ['date','rateDate','usdSelling','eurSelling','updatedAt']
+};
+
+function doGet() {
+  ensureDatabase_();
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Harcama Takip')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
+}
+
+function getBootstrapData() {
+  const ss = ensureDatabase_();
+  const records = readObjects_(ss.getSheetByName('Harcamalar'), SCHEMAS.Harcamalar);
+  const incomes = readObjects_(ss.getSheetByName('Gelirler'), SCHEMAS.Gelirler);
+  const debts = readObjects_(ss.getSheetByName('Borclar'), SCHEMAS.Borclar);
+  const upcoming = readObjects_(ss.getSheetByName('YaklasanOdemeler'), SCHEMAS.YaklasanOdemeler);
+  const assets = readObjects_(ss.getSheetByName('VarlikBorc'), SCHEMAS.VarlikBorc);
+  const attachments = readObjects_(ss.getSheetByName('Belgeler'), SCHEMAS.Belgeler);
+  const settingsRows = readObjects_(ss.getSheetByName('Ayarlar'), SCHEMAS.Ayarlar);
+  const settings = {};
+  settingsRows.forEach(r => {
+    if (r.key !== '' && r.key != null) settings[String(r.key)] = r.value;
+  });
+  const categories = Array.from(new Set(records.map(r => String(r.category || '').trim()).filter(Boolean))).sort();
+  return {records, incomes, debts, upcoming, assets, attachments, settings, categories};
+}
+
+
+function getBootstrapMeta() {
+  const ss = ensureDatabase_();
+  const sh = ss.getSheetByName('Harcamalar');
+  const recordCount = sh ? Math.max(0, sh.getLastRow() - 1) : 0;
+  const incomes = readObjects_(ss.getSheetByName('Gelirler'), SCHEMAS.Gelirler);
+  const debts = readObjects_(ss.getSheetByName('Borclar'), SCHEMAS.Borclar);
+  const upcoming = readObjects_(ss.getSheetByName('YaklasanOdemeler'), SCHEMAS.YaklasanOdemeler);
+  const assets = readObjects_(ss.getSheetByName('VarlikBorc'), SCHEMAS.VarlikBorc);
+  const attachments = readObjects_(ss.getSheetByName('Belgeler'), SCHEMAS.Belgeler);
+  const settingsRows = readObjects_(ss.getSheetByName('Ayarlar'), SCHEMAS.Ayarlar);
+  const settings = {};
+  settingsRows.forEach(r => { if (r.key !== '' && r.key != null) settings[String(r.key)] = r.value; });
+  return {recordCount, expenseVersion: getExpenseVersion_(), incomes, debts, upcoming, assets, attachments, settings};
+}
+
+function getTransactionChunk(offset, limit) {
+  const ss = ensureDatabase_();
+  const sh = ss.getSheetByName('Harcamalar');
+  if (!sh || sh.getLastRow() < 2) return [];
+  offset = Math.max(0, Number(offset) || 0);
+  limit = Math.min(1000, Math.max(1, Number(limit) || 500));
+  const available = Math.max(0, sh.getLastRow() - 1 - offset);
+  const count = Math.min(limit, available);
+  if (count <= 0) return [];
+  const lastCol = sh.getLastColumn();
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(v => String(v || '').trim());
+  const rows = sh.getRange(2 + offset, 1, count, lastCol).getValues();
+  return rows.map(row => {
+    const obj = {};
+    SCHEMAS.Harcamalar.forEach(h => {
+      const i = headers.indexOf(h);
+      obj[h] = i >= 0 ? plainValue_(row[i]) : '';
+    });
+    return obj;
+  }).filter(obj => obj.id !== '' && obj.id != null);
+}
+
+// İlk kurulumda yalnızca harcama arşivini temizler. Gelir/Borç vb. diğer tablolar korunur.
+function clearAllData() {
+  return withLock_(function() {
+    const ss = ensureDatabase_();
+    clearDataRows_(ss.getSheetByName('Harcamalar'));
+    return true;
+  });
+}
+
+function appendSeedChunk(rows) {
+  if (!Array.isArray(rows) || !rows.length) return 0;
+  return withLock_(function() {
+    const ss = ensureDatabase_();
+    const sh = ss.getSheetByName('Harcamalar');
+    const headers = SCHEMAS.Harcamalar;
+    const values = rows.map(r => headers.map(h => sanitizeForSheet_(r && r[h])));
+    sh.getRange(sh.getLastRow() + 1, 1, values.length, headers.length).setValues(values);
+    return values.length;
+  });
+}
+
+function finalizeSeed() {
+  const ss = ensureDatabase_();
+  const sh = ss.getSheetByName('Harcamalar');
+  formatSheet_(sh, SCHEMAS.Harcamalar);
+  bumpExpenseVersion_();
+  return Math.max(0, sh.getLastRow() - 1);
+}
+
+function saveTransaction(rec) {
+  const saved = saveObject_('Harcamalar', SCHEMAS.Harcamalar, rec, 'id');
+  saved.__expenseVersion = bumpExpenseVersion_();
+  return saved;
+}
+function deleteTransaction(id) {
+  const ok = deleteObject_('Harcamalar', id, 'id');
+  return {ok: !!ok, __expenseVersion: ok ? bumpExpenseVersion_() : getExpenseVersion_()};
+}
+
+function getExpenseVersion() {
+  return getExpenseVersion_();
+}
+
+function getExpenseVersion_() {
+  return String(PropertiesService.getScriptProperties().getProperty(EXPENSE_VERSION_PROP) || '0');
+}
+
+function bumpExpenseVersion_() {
+  const props = PropertiesService.getScriptProperties();
+  const current = Number(props.getProperty(EXPENSE_VERSION_PROP) || 0);
+  const next = String(current + 1);
+  props.setProperty(EXPENSE_VERSION_PROP, next);
+  return next;
+}
+
+function saveIncome(rec) {
+  return saveObject_('Gelirler', SCHEMAS.Gelirler, rec, 'id');
+}
+function deleteIncome(id) {
+  return deleteObject_('Gelirler', id, 'id');
+}
+
+function saveDebt(rec) {
+  const copy = Object.assign({}, rec || {});
+  if (Array.isArray(copy.payments)) copy.paymentsJson = JSON.stringify(copy.payments);
+  delete copy.payments;
+  const saved = saveObject_('Borclar', SCHEMAS.Borclar, copy, 'id');
+  try { saved.payments = saved.paymentsJson ? JSON.parse(saved.paymentsJson) : []; } catch (e) { saved.payments = []; }
+  return saved;
+}
+function deleteDebt(id) {
+  return deleteObject_('Borclar', id, 'id');
+}
+
+function saveUpcoming(rec) {
+  return saveObject_('YaklasanOdemeler', SCHEMAS.YaklasanOdemeler, rec, 'id');
+}
+function deleteUpcoming(id) {
+  return deleteObject_('YaklasanOdemeler', id, 'id');
+}
+
+function saveAsset(rec) {
+  return saveObject_('VarlikBorc', SCHEMAS.VarlikBorc, rec, 'id');
+}
+function deleteAsset(id) {
+  return deleteObject_('VarlikBorc', id, 'id');
+}
+
+function saveSetting(key, value) {
+  if (key == null || String(key).trim() === '') throw new Error('Ayar anahtarı boş olamaz.');
+  const ss = ensureDatabase_();
+  const sh = ss.getSheetByName('Ayarlar');
+  return withLock_(function() {
+    const row = findRowByValue_(sh, 1, String(key));
+    if (value === '' || value == null) {
+      if (row > 1) sh.deleteRow(row);
+      return true;
+    }
+    const vals = [String(key), sanitizeForSheet_(value)];
+    if (row > 1) sh.getRange(row, 1, 1, 2).setValues([vals]);
+    else sh.appendRow(vals);
+    return true;
+  });
+}
+
+function saveAttachment(transactionId, fileName, mimeType, base64) {
+  if (!transactionId) throw new Error('Harcama kimliği eksik.');
+  if (!fileName) throw new Error('Dosya adı eksik.');
+  if (!base64) throw new Error('Dosya içeriği boş.');
+  const bytes = Utilities.base64Decode(base64);
+  if (bytes.length > 5 * 1024 * 1024) throw new Error('Belge 5 MB sınırını aşıyor.');
+  const folder = ensureDocsFolder_();
+  const safeName = String(fileName).replace(/[\\/:*?"<>|]/g, '_').slice(0, 180);
+  const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', safeName);
+  const file = folder.createFile(blob);
+  const rec = {
+    id: 'att-' + Utilities.getUuid(),
+    transactionId: String(transactionId),
+    fileId: file.getId(),
+    fileName: safeName,
+    mimeType: mimeType || 'application/octet-stream',
+    url: file.getUrl(),
+    createdAt: new Date().toISOString()
+  };
+  return saveObject_('Belgeler', SCHEMAS.Belgeler, rec, 'id');
+}
+
+function deleteAttachment(id) {
+  if (!id) return false;
+  return withLock_(function() {
+    const ss = ensureDatabase_();
+    const sh = ss.getSheetByName('Belgeler');
+    const row = findRowByValue_(sh, 1, String(id));
+    if (row <= 1) return false;
+    const headers = SCHEMAS.Belgeler;
+    const vals = sh.getRange(row, 1, 1, headers.length).getValues()[0];
+    const fileId = vals[headers.indexOf('fileId')];
+    if (fileId) {
+      try { DriveApp.getFileById(String(fileId)).setTrashed(true); } catch (e) {}
+    }
+    sh.deleteRow(row);
+    return true;
+  });
+}
+
+
+function getTcmbRatesForDates(dates) {
+  dates = Array.from(new Set((Array.isArray(dates) ? dates : [])
+    .map(String)
+    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)))).slice(0, 60);
+  if (!dates.length) return {};
+
+  const ss = ensureDatabase_();
+  const sh = ss.getSheetByName('Kurlar');
+  const existing = readObjects_(sh, SCHEMAS.Kurlar);
+  const map = {};
+  existing.forEach(r => {
+    const key = String(r.date || '').slice(0, 10);
+    if (key) map[key] = r;
+  });
+
+  const missing = dates.filter(d => !map[d] || !Number(map[d].usdSelling) || !Number(map[d].eurSelling));
+  if (missing.length) {
+    const fetched = fetchTcmbRatesBulk_(missing);
+    const fresh = [];
+    Object.keys(fetched).forEach(d => {
+      map[d] = fetched[d];
+      fresh.push(fetched[d]);
+    });
+
+    if (fresh.length) {
+      const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(v => String(v || '').trim());
+      const values = fresh.map(r => headers.map(h => sanitizeForSheet_(r[h])));
+      sh.getRange(sh.getLastRow() + 1, 1, values.length, headers.length).setValues(values);
+    }
+  }
+
+  const out = {};
+  dates.forEach(d => { if (map[d]) out[d] = map[d]; });
+  return out;
+}
+
+
+function getStoredTcmbRates() {
+  const ss = ensureDatabase_();
+  const sh = ss.getSheetByName('Kurlar');
+  const rows = readObjects_(sh, SCHEMAS.Kurlar);
+  const out = {};
+  rows.forEach(r => {
+    const d = String(r.date || '').slice(0, 10);
+    const usd = Number(r.usdSelling) || 0;
+    const eur = Number(r.eurSelling) || 0;
+    if (d && usd > 0 && eur > 0) out[d] = r;
+  });
+  return out;
+}
+
+function fetchTcmbRatesBulk_(requestedDates) {
+  const wanted = Array.from(new Set((requestedDates || []).map(String))).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  if (!wanted.length) return {};
+
+  // Önemli: Her tarih için 11 ayrı URL'yi aynı anda istemiyoruz.
+  // Önce en muhtemel iş gününü deneriz; yalnızca bulunamayan tarihler için
+  // geriye doğru ek denemeler yaparız. Bu, Apps Script'in 6 dakikalık
+  // çalışma sınırına takılma riskini ciddi biçimde azaltır.
+  const available = {};
+  const attempted = {};
+  const resolved = {};
+
+  function parseIso_(iso) {
+    const p = String(iso).split('-').map(Number);
+    return new Date(p[0], p[1] - 1, p[2], 12, 0, 0);
+  }
+  function iso_(d) {
+    return Utilities.formatDate(d, 'Europe/Istanbul', 'yyyy-MM-dd');
+  }
+  function previousLikelyBusinessDay_(isoDate) {
+    const d = parseIso_(isoDate);
+    const wd = d.getDay();
+    if (wd === 6) d.setDate(d.getDate() - 1); // Cumartesi -> Cuma
+    if (wd === 0) d.setDate(d.getDate() - 2); // Pazar -> Cuma
+    return iso_(d);
+  }
+  function urlFor_(rateDate) {
+    const d = parseIso_(rateDate);
+    const ym = Utilities.formatDate(d, 'Europe/Istanbul', 'yyyyMM');
+    const dd = Utilities.formatDate(d, 'Europe/Istanbul', 'ddMMyyyy');
+    return 'https://www.tcmb.gov.tr/kurlar/' + ym + '/' + dd + '.xml';
+  }
+  function fetchRateDates_(rateDates) {
+    const unique = Array.from(new Set(rateDates)).filter(d => d && !attempted[d]);
+    if (!unique.length) return;
+    unique.forEach(d => attempted[d] = true);
+    const reqs = unique.map(d => ({
+      url: urlFor_(d), method: 'get', muteHttpExceptions: true, followRedirects: true,
+      headers: {'User-Agent':'Mozilla/5.0 (compatible; HarcamaTakip/2.0)','Accept':'application/xml,text/xml,*/*'}
+    }));
+    let responses = [];
+    try { responses = UrlFetchApp.fetchAll(reqs); }
+    catch (e) {
+      console.error('TCMB toplu kur isteği başarısız:', e && e.message ? e.message : e);
+      return;
+    }
+    responses.forEach((resp, i) => {
+      if (!resp || resp.getResponseCode() !== 200) return;
+      const rateDate = unique[i];
+      try {
+        const root = XmlService.parse(resp.getContentText('UTF-8')).getRootElement();
+        const currencies = root.getChildren('Currency');
+        let usd = 0, eur = 0;
+        currencies.forEach(c => {
+          const codeAttr = c.getAttribute('CurrencyCode') || c.getAttribute('Kod');
+          const cc = codeAttr ? String(codeAttr.getValue() || '').trim().toUpperCase() : '';
+          const selling = Number(String(c.getChildText('ForexSelling') || '').replace(',', '.')) || 0;
+          if (cc === 'USD') usd = selling;
+          if (cc === 'EUR') eur = selling;
+        });
+        if (usd > 0 && eur > 0) available[rateDate] = {usdSelling: usd, eurSelling: eur};
+      } catch (e) {
+        console.warn('TCMB XML ayrıştırma hatası ' + rateDate + ': ' + (e && e.message ? e.message : e));
+      }
+    });
+  }
+
+  // 1) Normal gün / hafta sonu için en muhtemel TCMB gününü tek seferde dene.
+  const primaryByWanted = {};
+  wanted.forEach(w => primaryByWanted[w] = previousLikelyBusinessDay_(w));
+  fetchRateDates_(Object.values(primaryByWanted));
+  wanted.forEach(w => {
+    const rd = primaryByWanted[w];
+    if (available[rd]) resolved[w] = rd;
+  });
+
+  // 2) Resmi tatil vb. yüzünden bulunamayanlar için yalnızca o tarihlerde geriye git.
+  for (let back = 1; back <= 10; back++) {
+    const unresolved = wanted.filter(w => !resolved[w]);
+    if (!unresolved.length) break;
+    const candidateByWanted = {};
+    unresolved.forEach(w => {
+      const d = parseIso_(w);
+      d.setDate(d.getDate() - back);
+      candidateByWanted[w] = previousLikelyBusinessDay_(iso_(d));
+    });
+    fetchRateDates_(Object.values(candidateByWanted));
+    unresolved.forEach(w => {
+      const rd = candidateByWanted[w];
+      if (available[rd]) resolved[w] = rd;
+    });
+  }
+
+  const now = new Date().toISOString();
+  const out = {};
+  wanted.forEach(w => {
+    const rd = resolved[w];
+    if (!rd || !available[rd]) return;
+    out[w] = {
+      date: w,
+      rateDate: rd,
+      usdSelling: available[rd].usdSelling,
+      eurSelling: available[rd].eurSelling,
+      updatedAt: now
+    };
+  });
+  return out;
+}
+
+function ensureDatabase_() {
+  // Sabit Spreadsheet ID kullanmıyoruz. Google Drive'da adıyla buluyoruz.
+  // Bu sayede kopyalama sırasında 1 / I / l gibi karakter karışıklıkları oluşmaz.
+  const files = DriveApp.getFilesByName(APP_DB_NAME);
+  let fallback = null;
+
+  while (files.hasNext()) {
+    const file = files.next();
+    if (file.getMimeType() !== MimeType.GOOGLE_SHEETS) continue;
+    if (!fallback) fallback = file;
+    try {
+      const candidate = SpreadsheetApp.openById(file.getId());
+      const sh = candidate.getSheetByName('Harcamalar');
+      if (sh && sh.getLastRow() > 1) {
+        try { candidate.setSpreadsheetTimeZone('Europe/Istanbul'); } catch (e) {}
+        Object.keys(SCHEMAS).forEach(name => ensureSheet_(candidate, name, SCHEMAS[name]));
+        return candidate;
+      }
+    } catch (e) {}
+  }
+
+  if (fallback) {
+    const ss = SpreadsheetApp.openById(fallback.getId());
+    try { ss.setSpreadsheetTimeZone('Europe/Istanbul'); } catch (e) {}
+    Object.keys(SCHEMAS).forEach(name => ensureSheet_(ss, name, SCHEMAS[name]));
+    return ss;
+  }
+
+  throw new Error('Google Drive içinde "' + APP_DB_NAME + '" adlı Google E-Tablosu bulunamadı.');
+}
+
+function ensureSheet_(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  if (sh.getMaxColumns() < headers.length) sh.insertColumnsAfter(sh.getMaxColumns(), headers.length - sh.getMaxColumns());
+
+  const currentLast = Math.max(1, sh.getLastColumn());
+  const firstRow = sh.getRange(1, 1, 1, Math.max(headers.length, currentLast)).getValues()[0];
+  const existing = firstRow.map(v => String(v || '').trim());
+
+  // Eski şemalarda eksik kolon varsa veri kaybetmeden sağ tarafa ekle.
+  headers.forEach(h => {
+    if (!existing.includes(h)) {
+      const col = Math.max(1, sh.getLastColumn() + 1);
+      sh.getRange(1, col).setValue(h);
+      existing.push(h);
+    }
+  });
+
+  // Yeni/boş sayfada başlıkları standart sırayla yaz.
+  if (sh.getLastRow() === 0 || existing.filter(Boolean).length === 0) {
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+  formatSheet_(sh, headers);
+  return sh;
+}
+
+function formatSheet_(sh, headers) {
+  if (!sh) return;
+  sh.setFrozenRows(1);
+  sh.getRange(1, 1, 1, Math.max(headers.length, sh.getLastColumn())).setFontWeight('bold');
+  try { sh.autoResizeColumns(1, Math.min(headers.length, 12)); } catch (e) {}
+}
+
+function readObjects_(sh, desiredHeaders) {
+  if (!sh || sh.getLastRow() < 2) return [];
+  const lastCol = sh.getLastColumn();
+  const raw = sh.getRange(1, 1, sh.getLastRow(), lastCol).getValues();
+  const headers = raw[0].map(v => String(v || '').trim());
+  return raw.slice(1).map(row => {
+    const obj = {};
+    desiredHeaders.forEach(h => {
+      const idx = headers.indexOf(h);
+      obj[h] = idx >= 0 ? plainValue_(row[idx]) : '';
+    });
+    return obj;
+  }).filter(obj => {
+    const key = desiredHeaders[0];
+    return obj[key] !== '' && obj[key] != null;
+  });
+}
+
+function saveObject_(sheetName, headers, rec, keyField) {
+  if (!rec || rec[keyField] == null || String(rec[keyField]).trim() === '') throw new Error('Kayıt kimliği eksik.');
+  return withLock_(function() {
+    const ss = ensureDatabase_();
+    const sh = ss.getSheetByName(sheetName);
+    const headerRow = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(v => String(v || '').trim());
+    // Şema kolonları daha önce farklı sırada oluşmuşsa mevcut kolon sırasına göre yaz.
+    const rowData = headerRow.map(h => sanitizeForSheet_(Object.prototype.hasOwnProperty.call(rec, h) ? rec[h] : ''));
+    const keyCol = headerRow.indexOf(keyField) + 1;
+    if (keyCol <= 0) throw new Error(sheetName + ' sayfasında kimlik kolonu bulunamadı.');
+    const row = findRowByValue_(sh, keyCol, String(rec[keyField]));
+    if (row > 1) sh.getRange(row, 1, 1, headerRow.length).setValues([rowData]);
+    else sh.getRange(sh.getLastRow() + 1, 1, 1, headerRow.length).setValues([rowData]);
+    const out = {};
+    headers.forEach(h => out[h] = plainValue_(rec[h]));
+    return out;
+  });
+}
+
+function deleteObject_(sheetName, id, keyField) {
+  if (!id) return false;
+  return withLock_(function() {
+    const ss = ensureDatabase_();
+    const sh = ss.getSheetByName(sheetName);
+    const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(v => String(v || '').trim());
+    const keyCol = headers.indexOf(keyField) + 1;
+    if (keyCol <= 0) return false;
+    const row = findRowByValue_(sh, keyCol, String(id));
+    if (row <= 1) return false;
+    sh.deleteRow(row);
+    return true;
+  });
+}
+
+function findRowByValue_(sh, col, value) {
+  const last = sh.getLastRow();
+  if (last < 2) return -1;
+  const finder = sh.getRange(2, col, last - 1, 1)
+    .createTextFinder(String(value))
+    .matchEntireCell(true)
+    .matchCase(true)
+    .findNext();
+  return finder ? finder.getRow() : -1;
+}
+
+function clearDataRows_(sh) {
+  if (!sh) return;
+  const rows = sh.getLastRow();
+  if (rows > 1) sh.getRange(2, 1, rows - 1, sh.getLastColumn()).clearContent();
+}
+
+function ensureDocsFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty(DOCS_PROP);
+  if (id) {
+    try { return DriveApp.getFolderById(id); } catch (e) {}
+  }
+  const folders = DriveApp.getFoldersByName(APP_DOCS_FOLDER);
+  const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(APP_DOCS_FOLDER);
+  props.setProperty(DOCS_PROP, folder.getId());
+  return folder;
+}
+
+function sanitizeForSheet_(v) {
+  if (v == null) return '';
+  if (v instanceof Date) return Utilities.formatDate(v, 'Europe/Istanbul', 'yyyy-MM-dd');
+  if (Array.isArray(v) || (typeof v === 'object' && v !== null)) return JSON.stringify(v);
+  return v;
+}
+
+function plainValue_(v) {
+  if (v == null) return '';
+  if (v instanceof Date) return Utilities.formatDate(v, 'Europe/Istanbul', 'yyyy-MM-dd');
+  return v;
+}
+
+function withLock_(fn) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try { return fn(); }
+  finally { lock.releaseLock(); }
+}
