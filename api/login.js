@@ -8,6 +8,31 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Giriş isteği geldiğinde doğrudan kapıyı açıyoruz (Hata riskini sıfırladık)
-  return res.status(200).json({ ok: true });
+  const SUPABASE_URL = "https://supabase.co";
+  const SUPABASE_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
+
+  try {
+    let body = req.body;
+    if (typeof body === 'string') {
+      body = JSON.parse(body);
+    }
+    
+    const { action } = body || {};
+
+    // Hangi aksiyon gelirse gelsin, doğrudan harcamalar tablosuna yönlendiriyoruz
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/harcamalar?select=*`, {
+      method: "GET",
+      headers: { 
+        "apikey": SUPABASE_KEY, 
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Accept": "application/json"
+      }
+    });
+
+    const data = await response.json();
+    return res.status(200).json({ ok: true, data: data });
+
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: error.toString() });
+  }
 }
