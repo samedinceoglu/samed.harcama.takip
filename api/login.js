@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, message: error.toString() });
   }
 }
-const response = await fetch(`${SUPABASE_URL}/rest/v1/harcamalar?select=*`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/harcamalar?select=*`, {
       method: "GET",
       headers: { 
         "apikey": SUPABASE_KEY, 
