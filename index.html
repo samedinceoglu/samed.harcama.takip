@@ -257,14 +257,17 @@
         });
       }
 
-      renderTable(filtered);
-      calculateTotals(filtered, allRecords);
+      // Filtrelenen liste boş kalsa bile ekrana doğrudan verileri bas
+      const displayRecords = (filtered.length > 0 || allRecords.length === 0) ? filtered : allRecords;
+
+      renderTable(displayRecords);
+      calculateTotals(displayRecords, allRecords);
     }
 
     function renderTable(records) {
       const tbody = document.getElementById('tableBody');
       if (!records || records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Seçili filtreye ait harcama kaydı bulunamadı. Lütfen "Tüm Yıllar" veya "Tümü" seçeneğini seçin.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Veritabanında kayıt bulunamadı.</td></tr>`;
         return;
       }
 
