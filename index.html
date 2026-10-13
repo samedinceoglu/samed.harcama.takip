@@ -134,6 +134,7 @@
 
   <script>
     const SPREADSHEET_ID = "1wwW48GDy5sssSMO1o7j1U_qBLiklfGU7og1lYd-2Duo";
+    const SHEET_NAME = "Harcamalar";
     const aylar = ["Tümü", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
     let currentSelectedMonth = "Tümü";
     let allRecords = [];
@@ -214,7 +215,7 @@
 
       const script = document.createElement('script');
       script.id = 'gvizScript';
-      script.src = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json`;
+      script.src = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&tqx=out:json`;
       
       script.onerror = function() {
         document.getElementById('statusText').innerText = "Bağlantı Hatası";
