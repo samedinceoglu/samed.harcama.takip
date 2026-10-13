@@ -8,7 +8,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Sizin Gerçek ve Canlı Supabase Adresiniz
+  // Sizin Gerçek ve Canlı Supabase Veritabanı Bağlantınız
   const SUPABASE_URL = "https://supabase.co";
   const SUPABASE_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
 
@@ -20,7 +20,6 @@ export default async function handler(req, res) {
     
     const { action } = body || {};
 
-    // Gelen istek boş bile gelse doğrudan kapıyı açıyoruz
     if (!action || action === "login") {
       if (action === "login") return res.status(200).json({ ok: true });
     }
