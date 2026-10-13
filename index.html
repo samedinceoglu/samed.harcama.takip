@@ -36,7 +36,7 @@
       </div>
     </div>
 
-    <!-- Ana Sekmeler (Giderler, Gelirler, Borç/Alacak...) -->
+    <!-- Ana Sekmeler -->
     <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
       <button class="tab-btn active" onclick="switchMainTab('giderler')">Giderler</button>
       <button class="tab-btn" onclick="switchMainTab('gelirler')">Gelirler</button>
@@ -130,7 +130,8 @@
   </div>
 
   <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1QUIqVK_HpGGryDubNm4RmuQelhGbuDb71qX8GX5PiqtcVUjZtJtoIJ3jPg7XePZ7/exec";
+    // Yeni Dağıtım Web Uygulaması URL'niz
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxwoyRgX-iJtIz-mlj1k8yvGO7RFBSa7OLPZf1qd66Kj6P2jxOk1eGb2wcMi7dochAU/exec";
     
     const aylar = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
     let currentSelectedMonth = "Ekim";
@@ -149,12 +150,10 @@
       filterData();
     }
 
-    // CORS Engelini Aşan Hızlı Veri Çekme Fonksiyonu
     function fetchDataFromGoogle() {
       document.getElementById('statusText').innerText = "Veriler Çekiliyor...";
       document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
       
-      // JSONP Yöntemi (Script tag ekleme)
       const oldScript = document.getElementById('googleScriptTag');
       if (oldScript) oldScript.remove();
 
@@ -171,7 +170,6 @@
       script.src = `${SCRIPT_URL}?callback=handleGoogleData`;
 
       script.onerror = function() {
-        // Doğrudan Fetch Yöntemi (Yedek)
         fetch(SCRIPT_URL)
           .then(res => res.json())
           .then(data => {
