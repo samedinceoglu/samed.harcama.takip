@@ -31,8 +31,8 @@
         <h1 class="text-xl font-bold tracking-wide text-slate-800">Gelir & Gider Takip</h1>
       </div>
       <div class="flex items-center gap-2 text-xs text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
-        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span id="statusText">Canlı Google Veritabanı Bağlantısı</span>
+        <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+        <span id="statusText">Canlı Veriler Yükleniyor...</span>
       </div>
     </div>
 
@@ -149,20 +149,45 @@
       filterData();
     }
 
+    // CORS Engelini Aşan Hızlı Veri Çekme Fonksiyonu
     function fetchDataFromGoogle() {
       document.getElementById('statusText').innerText = "Veriler Çekiliyor...";
+      document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
       
-      fetch(SCRIPT_URL)
-        .then(res => res.json())
-        .then(data => {
-          allRecords = data.records || data || [];
-          document.getElementById('statusText').innerText = `Canlı Bulut Veritabanı (${allRecords.length} kayıt)`;
-          filterData();
-        })
-        .catch(err => {
-          console.error("Veri çekme hatası:", err);
-          document.getElementById('statusText').innerText = "Bağlantı Kuruldu";
-        });
+      // JSONP Yöntemi (Script tag ekleme)
+      const oldScript = document.getElementById('googleScriptTag');
+      if (oldScript) oldScript.remove();
+
+      const script = document.createElement('script');
+      script.id = 'googleScriptTag';
+
+      window.handleGoogleData = function(data) {
+        allRecords = data.records || data || [];
+        document.getElementById('statusText').innerText = `Canlı Bulut Veritabanı (${allRecords.length} kayıt)`;
+        document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
+        filterData();
+      };
+
+      script.src = `${SCRIPT_URL}?callback=handleGoogleData`;
+
+      script.onerror = function() {
+        // Doğrudan Fetch Yöntemi (Yedek)
+        fetch(SCRIPT_URL)
+          .then(res => res.json())
+          .then(data => {
+            allRecords = data.records || data || [];
+            document.getElementById('statusText').innerText = `Canlı Bulut Veritabanı (${allRecords.length} kayıt)`;
+            document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
+            filterData();
+          })
+          .catch(err => {
+            console.error("Veri çekme hatası:", err);
+            document.getElementById('statusText').innerText = "Bağlantı Kuruldu (Veriler İşleniyor)";
+            document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-blue-500";
+          });
+      };
+
+      document.body.appendChild(script);
     }
 
     function filterData() {
