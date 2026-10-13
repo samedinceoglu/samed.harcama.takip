@@ -1,161 +1,37 @@
-<!doctype html>
-<html lang="tr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f172a">
-<title>Gelir &amp; Gider Takip</title>
-<style>
-:root{--bg:#f4f6f8;--panel:#fff;--ink:#111827;--muted:#64748b;--line:#e2e8f0;--navy:#0f172a;--accent:#c89b3c;--danger:#b91c1c;--shadow:0 12px 32px rgba(15,23,42,.08);--radius:18px}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer}.app{min-height:100vh}
-.topbar{position:sticky;top:0;z-index:20;background:rgba(15,23,42,.97);color:#fff;box-shadow:0 5px 24px rgba(15,23,42,.18)}.topbar-inner{max-width:1280px;margin:auto;padding:14px 20px;display:flex;align-items:center;gap:14px;justify-content:space-between}.brand{display:flex;align-items:center;gap:11px;font-weight:800}.brand-mark{width:36px;height:36px;border-radius:11px;background:linear-gradient(145deg,#d6b15c,#a7741f);display:grid;place-items:center;color:#111827;font-weight:900}.status{display:flex;align-items:center;gap:8px;font-size:13px;color:#cbd5e1}.status-dot{width:8px;height:8px;border-radius:50%;background:#22c55e}
-.main{max-width:1280px;margin:0 auto;padding:22px 20px 60px}.mode-tabs{display:inline-flex;gap:5px;padding:5px;background:#e9eef4;border:1px solid var(--line);border-radius:14px;margin-bottom:16px}.mode-tab{border:0;background:transparent;color:#475569;border-radius:10px;padding:9px 16px;font-weight:900}.mode-tab.active{background:#fff;color:var(--navy);box-shadow:0 2px 8px rgba(15,23,42,.08)}.view-hidden{display:none!important}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin-bottom:16px}.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:17px;box-shadow:var(--shadow)}.kpi-label{font-size:12px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.06em}.kpi-value{margin-top:6px;font-size:25px;font-weight:900;letter-spacing:-.03em}.kpi-sub{font-size:12px;color:var(--muted);margin-top:4px}
-.input,.select,.textarea{width:100%;border:1px solid #cbd5e1;border-radius:11px;background:#fff;padding:10px 11px;color:#111827;outline:none}
-.btn{border:0;border-radius:12px;padding:10px 14px;font-weight:800}.btn-primary{background:var(--navy);color:#fff}.btn-danger{background:#fee2e2;color:#991b1b}
-.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:900px}th{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;text-align:left;background:#f8fafc;padding:11px 12px;border-bottom:1px solid var(--line)}td{padding:11px 12px;border-bottom:1px solid #eef2f7;font-size:13px}td.num{text-align:right}
-.login-screen{position:fixed;inset:0;background:var(--navy);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px}.login-box{background:#fff;padding:30px;border-radius:20px;width:100%;max-width:400px;box-shadow:0 20px 50px rgba(0,0,0,0.3)}
-.login-box h2{margin:0 0 20px;font-weight:900;color:var(--navy);text-align:center}
-</style>
-</head>
-<body>
-
-<!-- GİRİŞ EKRANI -->
-<div id="authContainer" class="login-screen">
-  <div class="login-box">
-    <h2>Gelir &amp; Gider Takip</h2>
-    <div style="margin-bottom:15px;">
-      <label style="display:block;font-size:12px;font-weight:800;color:#475569;margin-bottom:6px;">Kullanıcı Adı</label>
-      <input type="text" id="loginUser" class="input" placeholder="Kullanıcı adınız">
-    </div>
-    <div style="margin-bottom:20px;">
-      <label style="display:block;font-size:12px;font-weight:800;color:#475569;margin-bottom:6px;">Parola</label>
-      <input type="password" id="loginPass" class="input" placeholder="••••••••">
-    </div>
-    <button onclick="handleLogin()" class="btn btn-primary" style="width:100%;">Giriş Yap</button>
-    <p id="loginError" style="color:var(--danger); font-size:13px; text-align:center; margin-top:10px; font-weight:700;"></p>
-  </div>
-</div>
-
-<!-- ANA PANEL UYGULAMASI -->
-<div id="appContainer" class="app view-hidden">
-  <div class="topbar">
-    <div class="topbar-inner">
-      <div class="brand"><div class="brand-mark">₺</div> <span>Gelir &amp; Gider Takip</span></div>
-      <div class="status"><div class="status-dot"></div> <span id="usernameDisplay">Samed</span> <button onclick="handleLogout()" class="btn btn-danger" style="padding:5px 10px; font-size:12px; margin-left:10px;">Çıkış</button></div>
-    </div>
-  </div>
-  
-  <div class="main">
-    <div class="mode-tabs">
-      <button class="mode-tab active" onclick="switchMode('giderler')">Giderler</button>
-      <button class="mode-tab" onclick="switchMode('gelirler')">Gelirler</button>
-    </div>
-
-    <div id="mod-giderler" class="mode-section">
-      <div class="kpis">
-        <div class="kpi"><div class="kpi-label">Seçili Dönem</div><div class="kpi-value" id="kpiSeciliDonem">₺0</div></div>
-        <div class="kpi"><div class="kpi-label">Kart Toplamı</div><div class="kpi-value">₺0</div></div>
-        <div class="kpi"><div class="kpi-label">Nakit Gider</div><div class="kpi-value">₺0</div></div>
-      </div>
-      
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Ekstre</th><th>Tarih</th><th>Harcama</th><th>Kategori</th><th>Ödeme</th><th class="num">Tutar</th></tr>
-          </thead>
-          <tbody id="giderTabloBody">
-            <tr><td colspan="6" style="text-align:center; padding:30px; color:#64748b;">Yükleniyor...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div id="mod-gelirler" class="mode-section view-hidden">
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Tarih</th><th>Gelir Kaynağı</th><th>Not</th><th class="num">Tutar</th></tr>
-          </thead>
-          <tbody id="gelirTabloBody">
-            <tr><td colspan="4" style="text-align:center; padding:30px; color:#64748b;">Gelir kaydı bulunamadı.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-// Sizin Gerçek xolniwgj... Adresiniz Milimetrik Entegre Edildi
-const S_URL = "https://supabase.co*";
-const S_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
-
-function switchMode(mode) {
-  document.querySelectorAll('.mode-section').forEach(s => s.classList.add('view-hidden'));
-  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
-  if(mode === 'giderler') document.getElementById('mod-giderler').classList.remove('view-hidden');
-  if(mode === 'gelirler') document.getElementById('mod-gelirler').classList.remove('view-hidden');
-  event.target.classList.add('active');
-}
-
-function handleLogin() {
-  const user = document.getElementById("loginUser").value;
-  const pass = document.getElementById("loginPass").value;
-  const errorEl = document.getElementById("loginError");
-  
-  if (!user || !pass) {
-    errorEl.innerText = "Lütfen alanları doldurun.";
-    return;
-  }
-  
-  errorEl.innerText = "";
-  document.getElementById("authContainer").classList.add("view-hidden");
-  document.getElementById("appContainer").classList.remove("view-hidden");
-  loadData();
-}
-
 async function loadData() {
+  const tBody = document.getElementById('giderTabloBody');
   try {
-    const response = await fetch(S_URL, {
-      method: "GET",
-      headers: { 
-        "apikey": S_KEY, 
-        "Authorization": `Bearer ${S_KEY}`,
-        "Accept": "application/json",
-        "Content-Type": "application/json"
-      }
+    const response = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "getData" })
     });
-    const data = await response.json();
-    const tBody = document.getElementById('giderTabloBody');
     
-    if(data && data.length > 0) {
+    const res = await response.json();
+    
+    if(res && res.ok && res.data) {
       tBody.innerHTML = '';
+      if (res.data.length === 0) {
+        tBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">Henüz kaydedilmiş harcama bulunamadı.</td></tr>';
+        return;
+      }
       let toplam = 0;
-      data.forEach(g => {
+      res.data.forEach(g => {
         toplam += Number(g.purchase_total || 0);
         tBody.innerHTML += `<tr>
-          <td>${g.period || ''}</td>
-          <td>${g.date || ''}</td>
-          <td>${g.description || ''}</td>
-          <td>${g.category || ''}</td>
+          <td>${g.period || '-'}</td>
+          <td>${g.date || '-'}</td>
+          <td>${g.description || '-'}</td>
+          <td>${g.category || '-'}</td>
           <td>${g.cash ? 'Nakit' : 'Kart'}</td>
           <td class="num">₺${Number(g.purchase_total || 0).toLocaleString('tr-TR')}</td>
         </tr>`;
       });
       document.getElementById('kpiSeciliDonem').innerText = `₺${toplam.toLocaleString('tr-TR')}`;
     } else {
-      tBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">Kayıt bulunamadı.</td></tr>';
+      tBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:red;">Veritabanından yanıt alınamadı.</td></tr>';
     }
   } catch(e) {
-    document.getElementById('giderTabloBody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:red;">Veritabanı bağlantı hatası!</td></tr>';
+    tBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:red;">Veritabanı bağlantı hatası! Lütfen API köprünüzü ve Supabase adresinizi kontrol edin.</td></tr>';
   }
 }
-
-function handleLogout() {
-  document.getElementById("authContainer").classList.remove("view-hidden");
-  document.getElementById("appContainer").classList.add("view-hidden");
-}
-</script>
-</body>
-</html>
