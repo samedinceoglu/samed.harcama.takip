@@ -176,7 +176,7 @@
           const rows = response.table.rows;
           allRecords = [];
 
-          rows.forEach((r, idx) => {
+          rows.forEach((r) => {
             if (!r || !r.c) return;
 
             const period = String(parseVal(r.c[1]));
@@ -241,7 +241,6 @@
         });
       }
 
-      // Eğer filtreleme sonucunda kayıt sıfırlanıyorsa ham verilerin tamamını göster
       const displayRecords = (filtered.length > 0 || allRecords.length === 0) ? filtered : allRecords;
 
       renderTable(displayRecords);
