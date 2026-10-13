@@ -173,30 +173,15 @@
         if (!response || !response.table || !response.table.rows) {
           allRecords = [];
         } else {
-          const cols = (response.table.cols || []).map(c => String(c.label || c.id || '').toLowerCase().trim());
-          
-          let periodIdx = cols.findIndex(c => c.includes('period'));
-          let dateIdx = cols.findIndex(c => c.includes('date'));
-          let descIdx = cols.findIndex(c => c.includes('description'));
-          let catIdx = cols.findIndex(c => c.includes('category'));
-          let creditIdx = cols.findIndex(c => c.includes('credit'));
-          let cashIdx = cols.findIndex(c => c.includes('cash'));
-
-          if (periodIdx === -1) periodIdx = 1;
-          if (dateIdx === -1) dateIdx = 2;
-          if (descIdx === -1) descIdx = 3;
-          if (catIdx === -1) catIdx = 4;
-          if (creditIdx === -1) creditIdx = 8;
-          if (cashIdx === -1) cashIdx = 13;
-
           const rows = response.table.rows;
           allRecords = [];
 
           rows.forEach((r) => {
             if (!r || !r.c) return;
 
-            const period = String(parseVal(r.c[periodIdx]));
-            let date = String(parseVal(r.c[dateIdx]));
+            // Sabit Sütun Pozisyonları (Harcama Takip Veritabanı Yapısına Göre)
+            const period = String(parseVal(r.c[1])); // Period (B Sütunu)
+            let date = String(parseVal(r.c[2]));     // Date (C Sütunu)
 
             if (date.startsWith('Date(')) {
               const parts = date.match(/\d+/g);
@@ -208,16 +193,17 @@
               }
             }
 
-            const description = String(parseVal(r.c[descIdx]));
-            const category = String(parseVal(r.c[catIdx]));
+            const description = String(parseVal(r.c[3])); // Description (D Sütunu)
+            const category = String(parseVal(r.c[4]));    // Category (E Sütunu)
             
-            const creditRaw = parseVal(r.c[creditIdx]);
-            const cashRaw = parseVal(r.c[cashIdx]);
+            const creditRaw = parseVal(r.c[8]);             // Credit (I Sütunu)
+            const cashRaw = parseVal(r.c[13]);              // Cash (N Sütunu)
 
             const credit = parseFloat(String(creditRaw).replace(',', '.')) || 0;
             const cash = parseFloat(String(cashRaw).replace(',', '.')) || 0;
 
-            if (description || date || period || credit > 0 || cash > 0) {
+            // Başlık satırı hariç gerçek harcamaları listeye ekle
+            if ((description || date || period) && description.toLowerCase() !== 'description') {
               allRecords.push({ period, date, description, category, credit, cash });
             }
           });
@@ -257,17 +243,14 @@
         });
       }
 
-      // Filtrelenen liste boş kalsa bile ekrana doğrudan verileri bas
-      const displayRecords = (filtered.length > 0 || allRecords.length === 0) ? filtered : allRecords;
-
-      renderTable(displayRecords);
-      calculateTotals(displayRecords, allRecords);
+      renderTable(filtered);
+      calculateTotals(filtered, allRecords);
     }
 
     function renderTable(records) {
       const tbody = document.getElementById('tableBody');
       if (!records || records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Veritabanında kayıt bulunamadı.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Seçili filtreye ait kayıt bulunamadı. Lütfen "Tüm Yıllar" veya "Tümü" seçeneğini kontrol edin.</td></tr>`;
         return;
       }
 
