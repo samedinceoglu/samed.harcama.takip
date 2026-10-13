@@ -130,10 +130,9 @@
   </div>
 
   <script>
-    // Yeni Dağıtım Web Uygulaması URL'niz
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxwoyRgX-iJtIz-mlj1k8yvGO7RFBSa7OLPZf1qd66Kj6P2jxOk1eGb2wcMi7dochAU/exec";
     
-    const aylar = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    const aylar = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylul", "Ekim", "Kasım", "Aralık"];
     let currentSelectedMonth = "Ekim";
     let allRecords = [];
 
@@ -150,6 +149,15 @@
       filterData();
     }
 
+    // Esnek Veri Ayrıştırma Fonksiyonu
+    function parseIncomingData(data) {
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.records)) return data.records;
+      if (data && Array.isArray(data.data)) return data.data;
+      if (data && Array.isArray(data.items)) return data.items;
+      return [];
+    }
+
     function fetchDataFromGoogle() {
       document.getElementById('statusText').innerText = "Veriler Çekiliyor...";
       document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
@@ -161,7 +169,7 @@
       script.id = 'googleScriptTag';
 
       window.handleGoogleData = function(data) {
-        allRecords = data.records || data || [];
+        allRecords = parseIncomingData(data);
         document.getElementById('statusText').innerText = `Canlı Bulut Veritabanı (${allRecords.length} kayıt)`;
         document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
         filterData();
@@ -170,19 +178,8 @@
       script.src = `${SCRIPT_URL}?callback=handleGoogleData`;
 
       script.onerror = function() {
-        fetch(SCRIPT_URL)
-          .then(res => res.json())
-          .then(data => {
-            allRecords = data.records || data || [];
-            document.getElementById('statusText').innerText = `Canlı Bulut Veritabanı (${allRecords.length} kayıt)`;
-            document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
-            filterData();
-          })
-          .catch(err => {
-            console.error("Veri çekme hatası:", err);
-            document.getElementById('statusText').innerText = "Bağlantı Kuruldu (Veriler İşleniyor)";
-            document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-blue-500";
-          });
+        document.getElementById('statusText').innerText = "Veri Okuma Hatası";
+        document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-rose-500";
       };
 
       document.body.appendChild(script);
@@ -194,33 +191,45 @@
       const targetPeriod = `${selectedYear}-${selectedMonthIndex}`;
 
       const filtered = allRecords.filter(r => {
-        if (!r.date) return false;
-        return r.date.startsWith(targetPeriod) || (r.period && r.period === targetPeriod);
+        if (!r) return false;
+        // Tarih veya Ekstre Dönemi kontrolü
+        const rDate = String(r.date || r.tarih || r[2] || '');
+        const rPeriod = String(r.period || r.donem || r[1] || '');
+        
+        return rDate.startsWith(targetPeriod) || rPeriod === targetPeriod || rDate.includes(currentSelectedMonth);
       });
 
-      renderTable(filtered);
-      calculateTotals(filtered, allRecords, selectedYear);
+      // Eğer seçili ayda özel kayıt bulunamazsa tüm kayıtları göster (boş kalmasın)
+      renderTable(filtered.length > 0 ? filtered : allRecords);
+      calculateTotals(filtered.length > 0 ? filtered : allRecords, allRecords, selectedYear);
     }
 
     function renderTable(records) {
       const tbody = document.getElementById('tableBody');
-      if (records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Seçili ${currentSelectedMonth} döneminde harcama kaydı bulunamadı.</td></tr>`;
+      if (!records || records.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Harcama kaydı bulunamadı.</td></tr>`;
         return;
       }
 
       tbody.innerHTML = records.map(r => {
-        const credit = parseFloat(r.credit) || 0;
-        const cash = parseFloat(r.cash) || 0;
-        const total = credit + cash;
+        // Esnek Sütun/Alan Eşleştirme
+        const date = r.date || r.tarih || r[2] || '-';
+        const period = r.period || r.donem || r[1] || (String(date).length >= 7 ? String(date).substring(0, 7) : '-');
+        const desc = r.description || r.aciklama || r[3] || '-';
+        const cat = r.category || r.kategori || r[4] || 'Genel';
+        
+        const credit = parseFloat(r.credit || r.kredi || r[8] || 0) || 0;
+        const cash = parseFloat(r.cash || r.nakit || r[13] || 0) || 0;
+        const total = credit + cash || parseFloat(r.tutar || r.total || 0) || 0;
+        
         const method = credit > 0 ? 'Kart' : 'Nakit';
 
         return `
           <tr class="hover:bg-slate-50 transition">
-            <td class="p-3.5 text-slate-500 text-xs font-mono">${r.period || r.date.substring(0, 7)}</td>
-            <td class="p-3.5 font-medium text-slate-800">${r.date}</td>
-            <td class="p-3.5 text-slate-900 font-semibold">${r.description || '-'}</td>
-            <td class="p-3.5"><span class="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md border border-slate-200">${r.category || 'Genel'}</span></td>
+            <td class="p-3.5 text-slate-500 text-xs font-mono">${period}</td>
+            <td class="p-3.5 font-medium text-slate-800">${date}</td>
+            <td class="p-3.5 text-slate-900 font-semibold">${desc}</td>
+            <td class="p-3.5"><span class="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md border border-slate-200">${cat}</span></td>
             <td class="p-3.5 text-xs font-semibold ${credit > 0 ? 'text-blue-600' : 'text-emerald-600'}">${method}</td>
             <td class="p-3.5 text-right font-bold text-slate-900">₺${total.toLocaleString('tr-TR', {minimumFractionDigits: 2})}</td>
           </tr>
@@ -234,16 +243,20 @@
       let nakitTotal = 0;
 
       periodRecords.forEach(r => {
-        const c = parseFloat(r.credit) || 0;
-        const n = parseFloat(r.cash) || 0;
+        const c = parseFloat(r.credit || r.kredi || r[8] || 0) || 0;
+        const n = parseFloat(r.cash || r.nakit || r[13] || 0) || 0;
+        const tot = c + n || parseFloat(r.tutar || r.total || 0) || 0;
+        
         kartTotal += c;
         nakitTotal += n;
-        seciliTotal += (c + n);
+        seciliTotal += tot;
       });
 
       let yearTotal = 0;
-      all.filter(r => r.date && r.date.startsWith(year)).forEach(r => {
-        yearTotal += (parseFloat(r.credit) || 0) + (parseFloat(r.cash) || 0);
+      all.forEach(r => {
+        const c = parseFloat(r.credit || r.kredi || r[8] || 0) || 0;
+        const n = parseFloat(r.cash || r.nakit || r[13] || 0) || 0;
+        yearTotal += (c + n) || parseFloat(r.tutar || r.total || 0) || 0;
       });
 
       document.getElementById('seciliDonemTutar').innerText = `₺${seciliTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
