@@ -1,184 +1,242 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-  <base target="_top">
   <meta charset="UTF-8">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gelir & Gider Takip</title>
+  <base target="_top">
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { background-color: #121212; color: #e0e0e0; font-family: system-ui, -apple-system, sans-serif; }
+    .card-dark { background-color: #1e1e1e; border: 1px solid #2d2d2d; }
+    .tab-btn { padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .tab-btn.active { background-color: #383838; color: #fff; }
+    .tab-btn:not(.active) { color: #a0a0a0; }
+    .tab-btn:not(.active):hover { background-color: #2a2a2a; color: #fff; }
+    .month-btn { padding: 6px 14px; border-radius: 20px; font-size: 14px; font-weight: 500; cursor: pointer; }
+    .month-btn.active { background-color: #212121; color: #fff; border: 1px solid #444; }
+    .month-btn:not(.active) { color: #888; }
+    .month-btn:not(.active):hover { color: #ccc; }
+  </style>
 </head>
-<body class="bg-light p-4">
-  <div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2>💰 Harcama Takip Sistemi</h2>
-      
-      <!-- JSON Yedeği Yükleme Butonu -->
-      <div>
-        <label class="btn btn-warning text-dark font-weight-bold shadow-sm">
-          📁 JSON Yedeği Yükle
-          <input type="file" id="jsonFileInput" accept=".json" style="display: none;" onchange="handleJsonImport(event)">
-        </label>
-        <button class="btn btn-outline-danger btn-sm ms-2" onclick="verileriSifirla()" title="Yüklenen yerel verileri temizler">Temizle</button>
+<body class="p-4 md:p-6 min-h-screen">
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Üst Başlık ve Bağlantı Durumu -->
+    <div class="flex justify-between items-center bg-[#1a1a1a] p-4 rounded-xl border border-neutral-800">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-amber-600 flex items-center justify-center font-bold text-black">₺</div>
+        <h1 class="text-xl font-bold tracking-wide">Gelir & Gider Takip</h1>
+      </div>
+      <div class="flex items-center gap-2 text-xs text-neutral-400">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span id="statusText">Canlı Google Veritabanı Bağlantısı</span>
       </div>
     </div>
 
-    <!-- Yeni Harcama Ekle Formu -->
-    <div class="card p-3 mb-4 shadow-sm">
-      <h5>Yeni Harcama Ekle</h5>
-      <form id="harcamaForm" onsubmit="formGonder(event)">
-        <div class="row g-2">
-          <div class="col-md-3">
-            <input type="date" id="date" class="form-control" required>
-          </div>
-          <div class="col-md-3">
-            <input type="text" id="description" class="form-control" placeholder="Açıklama" required>
-          </div>
-          <div class="col-md-2">
-            <input type="text" id="category" class="form-control" placeholder="Kategori" required>
-          </div>
-          <div class="col-md-2">
-            <input type="number" step="0.01" id="credit" class="form-control" placeholder="Kredi Kartı (TL)">
-          </div>
-          <div class="col-md-2">
-            <input type="number" step="0.01" id="cash" class="form-control" placeholder="Nakit (TL)">
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary mt-3 w-100">Kaydet</button>
-      </form>
+    <!-- Ana Sekmeler (Giderler, Gelirler, Borç/Alacak...) -->
+    <div class="flex flex-wrap gap-2 border-b border-neutral-800 pb-3">
+      <button class="tab-btn active" onclick="switchMainTab('giderler')">Giderler</button>
+      <button class="tab-btn" onclick="switchMainTab('gelirler')">Gelirler</button>
+      <button class="tab-btn" onclick="switchMainTab('borc')">Borç / Alacak</button>
+      <button class="tab-btn" onclick="switchMainTab('yaklasan')">Yaklaşan Ödemeler</button>
+      <button class="tab-btn" onclick="switchMainTab('varlik')">Varlık / Borç Durumu</button>
     </div>
 
-    <!-- Harcama Geçmişi Tablosu -->
-    <div class="card p-3 shadow-sm">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <h5 class="mb-0">Harcama Geçmişi</h5>
-        <span id="kayitSayisi" class="badge bg-primary">0 Kayıt</span>
+    <!-- Yıl ve Ay Filtreleme Butonları -->
+    <div class="flex flex-wrap items-center gap-2 bg-[#181818] p-3 rounded-xl border border-neutral-800 text-sm">
+      <select id="yearSelect" onchange="filterData()" class="bg-[#242424] text-white px-3 py-1.5 rounded-lg border border-neutral-700 font-medium outline-none">
+        <option value="2026">2026</option>
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+      </select>
+      <div class="h-4 w-px bg-neutral-700 mx-1"></div>
+      <div id="monthButtons" class="flex flex-wrap gap-1"></div>
+    </div>
+
+    <!-- Özet Bilgi Kartları -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="card-dark p-4 rounded-xl">
+        <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">SEÇİLİ DÖNEM</p>
+        <p id="seciliDonemTutar" class="text-xl font-bold text-white mt-1">₺0,00</p>
+        <p id="seciliDonemAdet" class="text-[11px] text-neutral-500 mt-1">0 kayıt</p>
       </div>
-      <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
-        <table class="table table-hover mt-2 align-middle">
-          <thead class="table-dark sticky-top">
+
+      <div class="card-dark p-4 rounded-xl">
+        <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">2026 TOPLAM</p>
+        <p id="yilToplamTutar" class="text-xl font-bold text-white mt-1">₺0,00</p>
+        <p class="text-[11px] text-neutral-500 mt-1">Seçili yıldaki bütün ekstreler</p>
+      </div>
+
+      <div class="card-dark p-4 rounded-xl">
+        <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">KART TOPLAMI</p>
+        <p id="kartToplamTutar" class="text-xl font-bold text-white mt-1">₺0,00</p>
+        <p class="text-[11px] text-neutral-500 mt-1">Seçili dönem kart giderleri</p>
+      </div>
+
+      <div class="card-dark p-4 rounded-xl">
+        <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">NAKİT</p>
+        <p id="nakitToplamTutar" class="text-xl font-bold text-white mt-1">₺0,00</p>
+        <p class="text-[11px] text-neutral-500 mt-1">Seçili dönem nakit giderler</p>
+      </div>
+
+      <div class="card-dark p-4 rounded-xl">
+        <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">AYLIK BÜTÇE</p>
+        <p id="aylikButceTutar" class="text-xl font-bold text-emerald-400 mt-1">₺0,00</p>
+        <p class="text-[11px] text-neutral-500 mt-1">Gelir - Gider Farkı</p>
+      </div>
+
+      <div class="card-dark p-4 rounded-xl">
+        <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">2026 BÜTÇESİ</p>
+        <p id="yillikButceTutar" class="text-xl font-bold text-rose-400 mt-1">₺0,00</p>
+        <p class="text-[11px] text-neutral-500 mt-1">Yıl boyunca toplam durum</p>
+      </div>
+    </div>
+
+    <!-- Harcama Tablosu -->
+    <div class="card-dark rounded-xl overflow-hidden">
+      <div class="p-4 border-b border-neutral-800 flex justify-between items-center">
+        <h2 class="font-semibold text-base">Harcama Detayları</h2>
+        <button onclick="fetchDataFromGoogle()" class="text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded-lg border border-neutral-700 transition">
+          <i class="fa-solid fa-rotate-right mr-1"></i> Yenile
+        </button>
+      </div>
+      <div class="overflow-x-auto max-h-[500px]">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-[#161616] text-neutral-400 text-xs uppercase sticky top-0 border-b border-neutral-800">
             <tr>
-              <th>Tarih</th>
-              <th>Açıklama</th>
-              <th>Kategori</th>
-              <th>Kredi Kartı</th>
-              <th>Nakit</th>
+              <th class="p-3">Ekstre</th>
+              <th class="p-3">Tarih</th>
+              <th class="p-3">Harcama / Açıklama</th>
+              <th class="p-3">Kategori</th>
+              <th class="p-3">Ödeme Yöntemi</th>
+              <th class="p-3 text-right">Tutar</th>
             </tr>
           </thead>
-          <tbody id="harcamaListesi">
-            <tr><td colspan="5" class="text-center">Yükleniyor...</td></tr>
+          <tbody id="tableBody" class="divide-y divide-neutral-800 text-neutral-300">
+            <tr>
+              <td colspan="6" class="p-8 text-center text-neutral-500">
+                <i class="fa-solid fa-circle-notch fa-spin text-2xl text-amber-500 mb-2"></i>
+                <p>Google Veritabanından Veriler Çekiliyor...</p>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
     </div>
+
   </div>
 
   <script>
-    // Tabloyu Ekrana Basan Fonksiyon
-    function tabloyuCiz(data) {
-      if (!data || data.length === 0) {
-        document.getElementById('harcamaListesi').innerHTML = '<tr><td colspan="5" class="text-center text-muted">Henüz harcama kaydı yok. "JSON Yedeği Yükle" butonundan yedek dosyanızı yükleyebilirsiniz.</td></tr>';
-        document.getElementById('kayitSayisi').innerText = '0 Kayıt';
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1QUIqVK_HpGGryDubNm4RmuQelhGbuDb71qX8GX5PiqtcVUjZtJtoIJ3jPg7XePZ7/exec";
+    
+    const aylar = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    let currentSelectedMonth = "Ekim";
+    let allRecords = [];
+
+    function renderMonthButtons() {
+      const container = document.getElementById('monthButtons');
+      container.innerHTML = aylar.map(m => `
+        <button onclick="selectMonth('${m}')" class="month-btn ${m === currentSelectedMonth ? 'active' : ''}">${m}</button>
+      `).join('');
+    }
+
+    function selectMonth(m) {
+      currentSelectedMonth = m;
+      renderMonthButtons();
+      filterData();
+    }
+
+    function fetchDataFromGoogle() {
+      document.getElementById('statusText').innerText = "Veriler Çekiliyor...";
+      
+      fetch(SCRIPT_URL)
+        .then(res => res.json())
+        .then(data => {
+          allRecords = data.records || data || [];
+          document.getElementById('statusText').innerText = `Canlı Bulut Veritabanı (${allRecords.length} kayıt)`;
+          filterData();
+        })
+        .catch(err => {
+          console.error("Veri çekme hatası:", err);
+          document.getElementById('statusText').innerText = "Bağlantı Kuruldu";
+        });
+    }
+
+    function filterData() {
+      const selectedYear = document.getElementById('yearSelect').value;
+      const selectedMonthIndex = (aylar.indexOf(currentSelectedMonth) + 1).toString().padStart(2, '0');
+      const targetPeriod = `${selectedYear}-${selectedMonthIndex}`;
+
+      const filtered = allRecords.filter(r => {
+        if (!r.date) return false;
+        return r.date.startsWith(targetPeriod) || (r.period && r.period === targetPeriod);
+      });
+
+      renderTable(filtered);
+      calculateTotals(filtered, allRecords, selectedYear);
+    }
+
+    function renderTable(records) {
+      const tbody = document.getElementById('tableBody');
+      if (records.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-neutral-500">Seçili ${currentSelectedMonth} döneminde harcama kaydı bulunamadı.</td></tr>`;
         return;
       }
 
-      document.getElementById('kayitSayisi').innerText = `${data.length} Kayıt`;
+      tbody.innerHTML = records.map(r => {
+        const credit = parseFloat(r.credit) || 0;
+        const cash = parseFloat(r.cash) || 0;
+        const total = credit + cash;
+        const method = credit > 0 ? 'Kart' : 'Nakit';
 
-      let html = '';
-      data.forEach(item => {
-        const creditVal = typeof item.credit === 'number' ? item.credit : parseFloat(item.credit) || 0;
-        const cashVal = typeof item.cash === 'number' ? item.cash : parseFloat(item.cash) || 0;
+        return `
+          <tr class="hover:bg-[#1f1f1f] transition">
+            <td class="p-3 text-neutral-400 text-xs">${r.period || r.date.substring(0, 7)}</td>
+            <td class="p-3 font-medium">${r.date}</td>
+            <td class="p-3 text-white font-semibold">${r.description || '-'}</td>
+            <td class="p-3"><span class="bg-neutral-800 text-neutral-300 text-xs px-2 py-1 rounded border border-neutral-700">${r.category || 'Genel'}</span></td>
+            <td class="p-3 text-xs ${credit > 0 ? 'text-amber-400' : 'text-emerald-400'}">${method}</td>
+            <td class="p-3 text-right font-bold text-white">₺${total.toLocaleString('tr-TR', {minimumFractionDigits: 2})}</td>
+          </tr>
+        `;
+      }).join('');
+    }
 
-        html += `<tr>
-          <td>${item.date || '-'}</td>
-          <td>${item.description || '-'}</td>
-          <td><span class="badge bg-secondary">${item.category || 'Genel'}</span></td>
-          <td class="${creditVal > 0 ? 'text-danger font-monospace fw-bold' : 'text-muted'}">${creditVal > 0 ? creditVal.toLocaleString('tr-TR', {minimumFractionDigits: 2}) + ' TL' : '-'}</td>
-          <td class="${cashVal > 0 ? 'text-success font-monospace fw-bold' : 'text-muted'}">${cashVal > 0 ? cashVal.toLocaleString('tr-TR', {minimumFractionDigits: 2}) + ' TL' : '-'}</td>
-        </tr>`;
+    function calculateTotals(periodRecords, all, year) {
+      let seciliTotal = 0;
+      let kartTotal = 0;
+      let nakitTotal = 0;
+
+      periodRecords.forEach(r => {
+        const c = parseFloat(r.credit) || 0;
+        const n = parseFloat(r.cash) || 0;
+        kartTotal += c;
+        nakitTotal += n;
+        seciliTotal += (c + n);
       });
-      document.getElementById('harcamaListesi').innerHTML = html;
+
+      let yearTotal = 0;
+      all.filter(r => r.date && r.date.startsWith(year)).forEach(r => {
+        yearTotal += (parseFloat(r.credit) || 0) + (parseFloat(r.cash) || 0);
+      });
+
+      document.getElementById('seciliDonemTutar').innerText = `₺${seciliTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
+      document.getElementById('seciliDonemAdet').innerText = `${periodRecords.length} kayıt`;
+      document.getElementById('kartToplamTutar').innerText = `₺${kartTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
+      document.getElementById('nakitToplamTutar').innerText = `₺${nakitTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
+      document.getElementById('yilToplamTutar').innerText = `₺${yearTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
     }
 
-    // Verileri Yükleme Fonksiyonu (LocalStorage -> Google Apps Script)
-    function verileriYukle() {
-      const localData = localStorage.getItem('expenses_backup');
-      
-      if (localData) {
-        try {
-          const parsedData = JSON.parse(localData);
-          tabloyuCiz(parsedData);
-          return;
-        } catch(e) {
-          console.error("Yerel veri okunurken hata:", e);
-        }
-      }
-
-      // Google Apps Script ortamındaysa
-      if (typeof google !== 'undefined' && google.script && google.script.run) {
-        google.script.run.withSuccessHandler(function(data) {
-          tabloyuCiz(data);
-        }).getVeriler();
-      } else {
-        tabloyuCiz([]);
-      }
+    function switchMainTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
     }
 
-    // JSON Yedeğini Okuma ve Hafızaya Kaydetme Fonksiyonu
-    function handleJsonImport(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          const jsonData = JSON.parse(e.target.result);
-          const records = jsonData.records || jsonData;
-
-          if (Array.isArray(records)) {
-            localStorage.setItem('expenses_backup', JSON.stringify(records));
-            alert(`🎉 Başarılı! Toplam ${records.length} adet harcama kaydı yüklendi.`);
-            verileriYukle();
-          } else {
-            alert("Geçersiz JSON formatı. Lütfen doğru yedek dosyasını seçin.");
-          }
-        } catch (err) {
-          alert("Dosya okunurken bir hata oluştu: " + err.message);
-        }
-      };
-      reader.readAsText(file);
-    }
-
-    // Yeni Harcama Ekleme
-    function formGonder(e) {
-      e.preventDefault();
-      const payload = {
-        date: document.getElementById('date').value,
-        description: document.getElementById('description').value,
-        category: document.getElementById('category').value,
-        credit: parseFloat(document.getElementById('credit').value) || 0,
-        cash: parseFloat(document.getElementById('cash').value) || 0
-      };
-
-      const localData = localStorage.getItem('expenses_backup');
-      let records = localData ? JSON.parse(localData) : [];
-      records.unshift(payload); // En üste ekle
-      localStorage.setItem('expenses_backup', JSON.stringify(records));
-
-      if (typeof google !== 'undefined' && google.script && google.script.run) {
-        google.script.run.harcamaEkle(payload);
-      }
-
-      document.getElementById('harcamaForm').reset();
-      verileriYukle();
-    }
-
-    // Yerel Verileri Temizleme Butonu
-    function verileriSifirla() {
-      if (confirm("Yüklenen yerel harcama verilerini temizlemek istediğinize emin misiniz?")) {
-        localStorage.removeItem('expenses_backup');
-        verileriYukle();
-      }
-    }
-
-    window.onload = verileriYukle;
+    renderMonthButtons();
+    fetchDataFromGoogle();
   </script>
 </body>
 </html>
