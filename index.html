@@ -221,7 +221,7 @@
         });
       }
 
-      // En yeni harcamalar en üstte olacak şekilde tarihe göre sıralama
+      // En yeni harcamalar en üstte
       filtered.sort((a, b) => {
         const dA = a.date || a.period || '';
         const dB = b.date || b.period || '';
@@ -242,13 +242,12 @@
       tbody.innerHTML = records.map(r => {
         const dateFormatted = formatDateTR(r.date);
         const desc = r.description || '-';
-        const cat = r.category || 'Genel';
+        const cat = r.category && r.category !== '' ? r.category : 'Genel';
         
         const credit = parseNum(r.credit);
         const cash = parseNum(r.cash);
         const total = credit + cash;
         
-        // Kart tutarı varsa 'Kart', yoksa 'Nakit'
         const isKart = credit > 0;
         const method = isKart ? 'Kart' : 'Nakit';
 
