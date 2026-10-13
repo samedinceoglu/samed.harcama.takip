@@ -87,7 +87,7 @@
 </div>
 
 <script>
-// Milimetrik olarak düzeltilen kesin ve temiz Supabase bağlantı tanımları
+// Sizin Gerçek Supabase Bilgileriniz (Tüm API kimlik doğrulama başlıkları eklendi)
 const S_URL = "https://supabase.co*";
 const S_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
 
@@ -122,7 +122,8 @@ async function loadData() {
       headers: { 
         "apikey": S_KEY, 
         "Authorization": `Bearer ${S_KEY}`,
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "Content-Type": "application/json"
       }
     });
     const data = await response.json();
@@ -144,10 +145,10 @@ async function loadData() {
       });
       document.getElementById('kpiSeciliDonem').innerText = `₺${toplam.toLocaleString('tr-TR')}`;
     } else {
-      tBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">Henüz kayıtlı harcama bulunamadı.</td></tr>';
+      tBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">Kayıt bulunamadı.</td></tr>';
     }
   } catch(e) {
-    document.getElementById('giderTabloBody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:red;">Veritabanı bağlantı hatası! Lütfen Supabase panelinden RLS politikalarını kontrol edin.</td></tr>';
+    document.getElementById('giderTabloBody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:red;">Veritabanı bağlantı hatası!</td></tr>';
   }
 }
 
