@@ -1,57 +1,313 @@
-const SPREADSHEET_ID = "1wwW48GDy5sssSMO1o7j1U_qBLiklfGU7og1lYd-2Duo";
-const SHEET_NAME = "Harcamalar";
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gelir & Gider Takip</title>
+  <base target="_top">
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { background-color: #f8fafc; color: #1e293b; font-family: system-ui, -apple-system, sans-serif; }
+    .card-light { background-color: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); }
+    .tab-btn { padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .tab-btn.active { background-color: #2563eb; color: #fff; }
+    .tab-btn:not(.active) { color: #64748b; background-color: #f1f5f9; }
+    .tab-btn:not(.active):hover { background-color: #e2e8f0; color: #0f172a; }
+    .month-btn { padding: 6px 14px; border-radius: 20px; font-size: 14px; font-weight: 500; cursor: pointer; border: 1px solid #cbd5e1; }
+    .month-btn.active { background-color: #1e293b; color: #fff; border-color: #1e293b; }
+    .month-btn:not(.active) { background-color: #ffffff; color: #475569; }
+    .month-btn:not(.active):hover { background-color: #f1f5f9; color: #0f172a; }
+  </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen">
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Üst Başlık ve Bağlantı Durumu -->
+    <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white shadow">₺</div>
+        <h1 class="text-xl font-bold tracking-wide text-slate-800">Gelir & Gider Takip</h1>
+      </div>
+      <div class="flex items-center gap-2 text-xs text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
+        <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+        <span id="statusText">Canlı Veriler Yükleniyor...</span>
+      </div>
+    </div>
 
-function doGet() {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sh = ss.getSheetByName(SHEET_NAME);
-    if (!sh) {
-      const names = ss.getSheets().map(s => s.getName()).join(", ");
-      return out({ error: "'" + SHEET_NAME + "' sekmesi bulunamadı. Mevcut sekmeler: " + names });
+    <!-- Ana Sekmeler -->
+    <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+      <button class="tab-btn active" onclick="switchMainTab('giderler')">Giderler</button>
+      <button class="tab-btn" onclick="switchMainTab('gelirler')">Gelirler</button>
+      <button class="tab-btn" onclick="switchMainTab('borc')">Borç / Alacak</button>
+      <button class="tab-btn" onclick="switchMainTab('yaklasan')">Yaklaşan Ödemeler</button>
+      <button class="tab-btn" onclick="switchMainTab('varlik')">Varlık / Borç Durumu</button>
+    </div>
+
+    <!-- Yıl ve Ay Filtreleme Butonları -->
+    <div class="flex flex-wrap items-center gap-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-sm">
+      <select id="yearSelect" onchange="filterData()" class="bg-slate-50 text-slate-800 px-3 py-1.5 rounded-lg border border-slate-300 font-semibold outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="TUMU" selected>Tüm Yıllar</option>
+        <option value="2026">2026</option>
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+        <option value="2013">2013</option>
+        <option value="2010">2010</option>
+      </select>
+      <div class="h-5 w-px bg-slate-300 mx-1"></div>
+      <div id="monthButtons" class="flex flex-wrap gap-1"></div>
+    </div>
+
+    <!-- Özet Bilgi Kartları -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="card-light p-4 rounded-xl">
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">SEÇİLİ DÖNEM</p>
+        <p id="seciliDonemTutar" class="text-xl font-extrabold text-slate-800 mt-1">₺0,00</p>
+        <p id="seciliDonemAdet" class="text-[11px] text-slate-500 mt-1">0 kayıt</p>
+      </div>
+
+      <div class="card-light p-4 rounded-xl">
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">GENEL TOPLAM</p>
+        <p id="yilToplamTutar" class="text-xl font-extrabold text-slate-800 mt-1">₺0,00</p>
+        <p class="text-[11px] text-slate-500 mt-1">Tüm harcamalar</p>
+      </div>
+
+      <div class="card-light p-4 rounded-xl">
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">KART TOPLAMI</p>
+        <p id="kartToplamTutar" class="text-xl font-extrabold text-blue-600 mt-1">₺0,00</p>
+        <p class="text-[11px] text-slate-500 mt-1">Kart gideri</p>
+      </div>
+
+      <div class="card-light p-4 rounded-xl">
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">NAKİT</p>
+        <p id="nakitToplamTutar" class="text-xl font-extrabold text-emerald-600 mt-1">₺0,00</p>
+        <p class="text-[11px] text-slate-500 mt-1">Nakit gider</p>
+      </div>
+
+      <div class="card-light p-4 rounded-xl">
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AYLIK BÜTÇE</p>
+        <p id="aylikButceTutar" class="text-xl font-extrabold text-emerald-600 mt-1">₺0,00</p>
+        <p class="text-[11px] text-slate-500 mt-1">Gelir - Gider Farkı</p>
+      </div>
+
+      <div class="card-light p-4 rounded-xl">
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">GENEL BÜTÇE</p>
+        <p id="yillikButceTutar" class="text-xl font-extrabold text-rose-600 mt-1">₺0,00</p>
+        <p class="text-[11px] text-slate-500 mt-1">Genel durum</p>
+      </div>
+    </div>
+
+    <!-- Harcama Tablosu -->
+    <div class="card-light rounded-xl overflow-hidden">
+      <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <h2 class="font-bold text-slate-800 text-base">Harcama Detayları</h2>
+        <button onclick="fetchDataFromGoogle()" class="text-xs bg-white hover:bg-slate-100 text-slate-700 font-semibold px-3 py-1.5 rounded-lg border border-slate-300 shadow-sm transition flex items-center gap-1.5">
+          <i class="fa-solid fa-rotate-right text-slate-500"></i> Yenile
+        </button>
+      </div>
+      <div class="overflow-x-auto max-h-[550px]">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-100 text-slate-600 text-xs font-bold uppercase sticky top-0 border-b border-slate-200">
+            <tr>
+              <th class="p-3.5">Ekstre</th>
+              <th class="p-3.5">Tarih</th>
+              <th class="p-3.5">Harcama / Açıklama</th>
+              <th class="p-3.5">Kategori</th>
+              <th class="p-3.5">Ödeme Yöntemi</th>
+              <th class="p-3.5 text-right">Tutar</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-200 text-slate-700">
+            <tr>
+              <td colspan="6" class="p-8 text-center text-slate-500">
+                <i class="fa-solid fa-circle-notch fa-spin text-2xl text-blue-600 mb-2"></i>
+                <p class="font-medium">Google Veritabanından Veriler Çekiliyor...</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const SPREADSHEET_ID = "1wwW48GDy5sssSMO1o7j1U_qBLiklfGU7og1lYd-2Duo";
+    const SHEET_NAME = "Harcamalar";
+    const aylar = ["Tümü", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    let currentSelectedMonth = "Tümü";
+    let allRecords = [];
+
+    function renderMonthButtons() {
+      const container = document.getElementById('monthButtons');
+      container.innerHTML = aylar.map(m => `
+        <button onclick="selectMonth('${m}')" class="month-btn ${m === currentSelectedMonth ? 'active' : ''}">${m}</button>
+      `).join('');
     }
-    const tz = ss.getSpreadsheetTimeZone();
-    const values = sh.getDataRange().getValues();
-    const headers = values[0].map(h => String(h).trim().toLowerCase());
 
-    // Önce başlık adına bakar, bulamazsa eski sütun sırasına döner (B,C,D,E,I,N)
-    const col = (name, fallback) => {
-      const i = headers.indexOf(name);
-      return i >= 0 ? i : fallback;
-    };
-    const cPeriod = col("period", 1), cDate = col("date", 2), cDesc = col("description", 3),
-          cCat = col("category", 4), cCredit = col("credit", 8), cCash = col("cash", 13);
+    function selectMonth(m) {
+      currentSelectedMonth = m;
+      renderMonthButtons();
+      filterData();
+    }
 
-    const fmtDate = (v, pattern) =>
-      v instanceof Date ? Utilities.formatDate(v, tz, pattern) : String(v === null ? "" : v);
-    const num = v => {
-      if (typeof v === "number") return v;
-      let s = String(v || "").replace(/[₺\s]/g, "");
-      if (s.indexOf(",") >= 0) s = s.replace(/\./g, "").replace(",", ".");
-      return parseFloat(s) || 0;
-    };
+    function parseVal(cell) {
+      if (!cell) return '';
+      if (cell.f !== undefined && cell.f !== null) return cell.f;
+      if (cell.v !== undefined && cell.v !== null) return cell.v;
+      return '';
+    }
 
-    const records = [];
-    for (let i = 1; i < values.length; i++) {
-      const r = values[i];
-      const description = String(r[cDesc] || "").trim();
-      const date = fmtDate(r[cDate], "yyyy-MM-dd");
-      if (!description && !date) continue;
-      records.push({
-        period: fmtDate(r[cPeriod], "yyyy-MM"),
-        date: date,
-        description: description,
-        category: String(r[cCat] || ""),
-        credit: num(r[cCredit]),
-        cash: num(r[cCash])
+    function fetchDataFromGoogle() {
+      document.getElementById('statusText').innerText = "Veriler Çekiliyor...";
+      document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
+
+      const oldScript = document.getElementById('gvizScript');
+      if (oldScript) oldScript.remove();
+
+      window.google = window.google || {};
+      window.google.visualization = window.google.visualization || {};
+      window.google.visualization.Query = window.google.visualization.Query || {};
+      
+      window.google.visualization.Query.setResponse = function(response) {
+        if (!response || !response.table || !response.table.rows) {
+          allRecords = [];
+        } else {
+          const rows = response.table.rows;
+          allRecords = [];
+
+          rows.forEach((r) => {
+            if (!r || !r.c) return;
+
+            const period = String(parseVal(r.c[1]));       // period (B)
+            let date = String(parseVal(r.c[2]));           // date (C)
+
+            if (date.startsWith('Date(')) {
+              const parts = date.match(/\d+/g);
+              if (parts && parts.length >= 3) {
+                const y = parts[0];
+                const m = String(parseInt(parts[1]) + 1).padStart(2, '0');
+                const d = String(parts[2]).padStart(2, '0');
+                date = `${y}-${m}-${d}`;
+              }
+            }
+
+            const description = String(parseVal(r.c[3]));  // description (D)
+            const category = String(parseVal(r.c[4]));     // category (E)
+            
+            const creditRaw = parseVal(r.c[8]);             // credit (I)
+            const cashRaw = parseVal(r.c[13]);              // cash (N)
+
+            const credit = parseFloat(String(creditRaw).replace(',', '.')) || 0;
+            const cash = parseFloat(String(cashRaw).replace(',', '.')) || 0;
+
+            if ((description || date || period) && description.toLowerCase() !== 'description') {
+              allRecords.push({ period, date, description, category, credit, cash });
+            }
+          });
+        }
+
+        document.getElementById('statusText').innerText = `Canlı Bulut Veritabanı (${allRecords.length} kayıt)`;
+        document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
+        filterData();
+      };
+
+      const script = document.createElement('script');
+      script.id = 'gvizScript';
+      script.src = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&tqx=out:json`;
+      
+      script.onerror = function() {
+        document.getElementById('statusText').innerText = "Bağlantı Hatası";
+        document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+      };
+
+      document.body.appendChild(script);
+    }
+
+    function filterData() {
+      const selectedYear = document.getElementById('yearSelect').value;
+      
+      let filtered = allRecords;
+
+      if (selectedYear !== 'TUMU') {
+        filtered = filtered.filter(r => String(r.date || r.period || '').includes(selectedYear));
+      }
+
+      if (currentSelectedMonth !== 'Tümü') {
+        const monthIndex = (aylar.indexOf(currentSelectedMonth)).toString().padStart(2, '0');
+        filtered = filtered.filter(r => {
+          const d = String(r.date || r.period || '');
+          return d.includes(`-${monthIndex}-`) || d.toLowerCase().includes(currentSelectedMonth.toLowerCase());
+        });
+      }
+
+      renderTable(filtered);
+      calculateTotals(filtered, allRecords);
+    }
+
+    function renderTable(records) {
+      const tbody = document.getElementById('tableBody');
+      if (!records || records.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Seçili filtreye ait kayıt bulunamadı. Lütfen "Tüm Yıllar" veya "Tümü" seçeneğini kontrol edin.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = records.map(r => {
+        const date = r.date || '-';
+        const period = r.period || (String(date).length >= 7 ? String(date).substring(0, 7) : '-');
+        const desc = r.description || '-';
+        const cat = r.category || 'Genel';
+        const credit = parseFloat(r.credit) || 0;
+        const cash = parseFloat(r.cash) || 0;
+        const total = credit + cash;
+        const method = credit > 0 ? 'Kart' : 'Nakit';
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3.5 text-slate-500 text-xs font-mono">${period}</td>
+            <td class="p-3.5 font-medium text-slate-800">${date}</td>
+            <td class="p-3.5 text-slate-900 font-semibold">${desc}</td>
+            <td class="p-3.5"><span class="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md border border-slate-200">${cat}</span></td>
+            <td class="p-3.5 text-xs font-semibold ${credit > 0 ? 'text-blue-600' : 'text-emerald-600'}">${method}</td>
+            <td class="p-3.5 text-right font-bold text-slate-900">₺${total.toLocaleString('tr-TR', {minimumFractionDigits: 2})}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function calculateTotals(records, all) {
+      let seciliTotal = 0;
+      let kartTotal = 0;
+      let nakitTotal = 0;
+
+      records.forEach(r => {
+        const c = parseFloat(r.credit) || 0;
+        const n = parseFloat(r.cash) || 0;
+        kartTotal += c;
+        nakitTotal += n;
+        seciliTotal += (c + n);
       });
-    }
-    return out({ ok: true, count: records.length, headers: headers, records: records });
-  } catch (err) {
-    return out({ error: String(err) });
-  }
-}
 
-function out(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+      let yearTotal = 0;
+      all.forEach(r => {
+        yearTotal += (parseFloat(r.credit) || 0) + (parseFloat(r.cash) || 0);
+      });
+
+      document.getElementById('seciliDonemTutar').innerText = `₺${seciliTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
+      document.getElementById('seciliDonemAdet').innerText = `${records.length} kayıt`;
+      document.getElementById('kartToplamTutar').innerText = `₺${kartTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
+      document.getElementById('nakitToplamTutar').innerText = `₺${nakitTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
+      document.getElementById('yilToplamTutar').innerText = `₺${yearTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
+    }
+
+    function switchMainTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+
+    renderMonthButtons();
+    fetchDataFromGoogle();
+  </script>
+</body>
+</html>
