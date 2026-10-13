@@ -133,7 +133,7 @@
   </div>
 
   <script>
-    const API_URL = "/api/data";
+    const SPREADSHEET_ID = "1wwW48GDy5sssSMO1o7j1U_qBLiklfGU7og1lYd-2Duo";
     const aylar = ["Tümü", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
     let currentSelectedMonth = "Tümü";
     let allRecords = [];
@@ -151,68 +151,68 @@
       filterData();
     }
 
-    function parseCSVLine(text) {
-      let p = '', c = '', r = [];
-      let q = false;
-      for (let i = 0; i < text.length; i++) {
-        c = text[i];
-        if (c === '"') { q = !q; }
-        else if (c === ',' && !q) { r.push(p.trim()); p = ''; }
-        else { p += c; }
-      }
-      r.push(p.trim());
-      return r;
-    }
-
     function fetchDataFromGoogle() {
       document.getElementById('statusText').innerText = "Veriler Çekiliyor...";
       document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
 
-      fetch(API_URL)
-        .then(response => {
-          if (!response.ok) throw new Error("API yanıtı başarısız");
-          return response.text();
-        })
-        .then(csvText => {
-          const lines = csvText.split('\n');
-          if (lines.length <= 1) {
-            allRecords = [];
-          } else {
-            const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/"/g, ''));
-            
-            const periodIdx = headers.indexOf('period') !== -1 ? headers.indexOf('period') : 1;
-            const dateIdx = headers.indexOf('date') !== -1 ? headers.indexOf('date') : 2;
-            const descIdx = headers.indexOf('description') !== -1 ? headers.indexOf('description') : 3;
-            const catIdx = headers.indexOf('category') !== -1 ? headers.indexOf('category') : 4;
-            const creditIdx = headers.indexOf('credit') !== -1 ? headers.indexOf('credit') : 8;
-            const cashIdx = headers.indexOf('cash') !== -1 ? headers.indexOf('cash') : 13;
+      const oldScript = document.getElementById('gvizScript');
+      if (oldScript) oldScript.remove();
 
-            allRecords = [];
-            for (let i = 1; i < lines.length; i++) {
-              if (!lines[i].trim()) continue;
-              const row = parseCSVLine(lines[i]);
-              
-              const period = (row[periodIdx] || '').replace(/"/g, '');
-              const date = (row[dateIdx] || '').replace(/"/g, '');
-              const description = (row[descIdx] || '').replace(/"/g, '');
-              const category = (row[catIdx] || '').replace(/"/g, '');
-              
-              const credit = parseFloat((row[creditIdx] || '0').replace(/"/g, '').replace(',', '.')) || 0;
-              const cash = parseFloat((row[cashIdx] || '0').replace(/"/g, '').replace(',', '.')) || 0;
+      window.google = window.google || {};
+      window.google.visualization = window.google.visualization || {};
+      window.google.visualization.Query = window.google.visualization.Query || {};
+      
+      window.google.visualization.Query.setResponse = function(response) {
+        if (!response || !response.table || !response.table.rows) {
+          allRecords = [];
+        } else {
+          const rows = response.table.rows;
+          allRecords = [];
 
+          rows.forEach(r => {
+            if (!r.c) return;
+
+            const period = r.c[1] ? String(r.c[1].v || r.c[1].f || '') : '';
+            let date = '';
+            if (r.c[2]) {
+              date = r.c[2].f || String(r.c[2].v || '');
+              if (date.startsWith('Date(')) {
+                const parts = date.match(/\d+/g);
+                if (parts && parts.length >= 3) {
+                  const y = parts[0];
+                  const m = String(parseInt(parts[1]) + 1).padStart(2, '0');
+                  const d = String(parts[2]).padStart(2, '0');
+                  date = `${y}-${m}-${d}`;
+                }
+              }
+            }
+
+            const description = r.c[3] ? String(r.c[3].v || '') : '';
+            const category = r.c[4] ? String(r.c[4].v || '') : '';
+            const credit = r.c[8] ? parseFloat(r.c[8].v || 0) : 0;
+            const cash = r.c[13] ? parseFloat(r.c[13].v || 0) : 0;
+
+            if (period || date || description) {
               allRecords.push({ period, date, description, category, credit, cash });
             }
-          }
+          });
+        }
 
-          document.getElementById('statusText').innerText = `Canlı Bulut Veritabanı (${allRecords.length} kayıt)`;
-          document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
-          filterData();
-        })
-        .catch(err => {
-          console.error("Veri çekme hatası:", err);
-          document.getElementById('statusText').innerText = "Bağlantı Hatası";
-          document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-rose-500";
-        });
+        document.getElementById('statusText').innerText = `Canlı Bulut Veritabanı (${allRecords.length} kayıt)`;
+        document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
+        filterData();
+      };
+
+      const script = document.createElement('script');
+      script.id = 'gvizScript';
+      script.src = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json`;
+      
+      script.onerror = function() {
+        document.getElementById('statusText').innerText = "Bağlantı Hatası";
+        document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+      };
+
+      document.body.appendChild(script);
     }
 
     function filterData() {
