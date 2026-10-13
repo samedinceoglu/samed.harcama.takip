@@ -133,7 +133,7 @@
   </div>
 
   <script>
-    const SPREADSHEET_ID = "1wwW48GDy5sssSMO1o7j1U_qBLiklfGU7og1lYd-2Duo";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxwoyRgX-iJtIz-mlj1k8yvGO7RFBSa7OLPZf1qd66Kj6P2jxOk1eGb2wcMi7dochAU/exec";
     const aylar = ["Tümü", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
     let currentSelectedMonth = "Tümü";
     let allRecords = [];
@@ -151,71 +151,20 @@
       filterData();
     }
 
-    function parseVal(cell) {
-      if (!cell) return '';
-      if (cell.f !== undefined && cell.f !== null) return cell.f;
-      if (cell.v !== undefined && cell.v !== null) return cell.v;
-      return '';
-    }
-
     function fetchDataFromGoogle() {
       document.getElementById('statusText').innerText = "Veriler Çekiliyor...";
       document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
 
-      const oldScript = document.getElementById('gvizScript');
+      const oldScript = document.getElementById('appScriptTag');
       if (oldScript) oldScript.remove();
 
-      window.google = window.google || {};
-      window.google.visualization = window.google.visualization || {};
-      window.google.visualization.Query = window.google.visualization.Query || {};
-      
-      window.google.visualization.Query.setResponse = function(response) {
-        if (!response || !response.table || !response.table.rows) {
-          allRecords = [];
+      window.handleGoogleData = function(data) {
+        if (data && data.status === "success" && Array.isArray(data.records)) {
+          allRecords = data.records;
+        } else if (Array.isArray(data)) {
+          allRecords = data;
         } else {
-          const rows = response.table.rows;
           allRecords = [];
-
-          rows.forEach((r) => {
-            if (!r || !r.c) return;
-
-            // Hücre alanlarını güvenli oku
-            let period = '';
-            let date = '';
-            let description = '';
-            let category = '';
-            let credit = 0;
-            let cash = 0;
-
-            // Tüm sütunları gezerek verileri eşleştir
-            r.c.forEach((cell, idx) => {
-              const val = String(parseVal(cell));
-              if (!val) return;
-
-              if (idx === 1) period = val;
-              else if (idx === 2) {
-                date = val;
-                if (date.startsWith('Date(')) {
-                  const parts = date.match(/\d+/g);
-                  if (parts && parts.length >= 3) {
-                    const y = parts[0];
-                    const m = String(parseInt(parts[1]) + 1).padStart(2, '0');
-                    const d = String(parts[2]).padStart(2, '0');
-                    date = `${y}-${m}-${d}`;
-                  }
-                }
-              }
-              else if (idx === 3) description = val;
-              else if (idx === 4) category = val;
-              else if (idx === 8) credit = parseFloat(val.replace(',', '.')) || 0;
-              else if (idx === 13) cash = parseFloat(val.replace(',', '.')) || 0;
-            });
-
-            // Başlık satırı hariç verileri ekle
-            if ((description || date || period) && description.toLowerCase() !== 'description') {
-              allRecords.push({ period, date, description, category, credit, cash });
-            }
-          });
         }
 
         document.getElementById('statusText').innerText = `Canlı Bulut Veritabanı (${allRecords.length} kayıt)`;
@@ -223,11 +172,10 @@
         filterData();
       };
 
-      // Tq sorgusu doğrudan JSON olarak tetikleniyor
       const script = document.createElement('script');
-      script.id = 'gvizScript';
-      script.src = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json`;
-      
+      script.id = 'appScriptTag';
+      script.src = `${SCRIPT_URL}?callback=handleGoogleData`;
+
       script.onerror = function() {
         document.getElementById('statusText').innerText = "Bağlantı Hatası";
         document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-rose-500";
@@ -260,7 +208,7 @@
     function renderTable(records) {
       const tbody = document.getElementById('tableBody');
       if (!records || records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Seçili filtreye ait harcama kaydı bulunamadı. Lütfen "Tüm Yıllar" veya "Tümü" seçeneğini seçin.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Kayıt bulunamadı. Lütfen "Tüm Yıllar" veya "Tümü" seçeneğini kontrol edin.</td></tr>`;
         return;
       }
 
