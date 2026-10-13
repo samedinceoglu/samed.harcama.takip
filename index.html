@@ -159,6 +159,18 @@
       return dateStr;
     }
 
+    function parseNum(val) {
+      if (val === undefined || val === null || val === '') return 0;
+      if (typeof val === 'number') return val;
+      let str = String(val).trim().replace(/\s/g, '');
+      if (str.includes(',') && str.includes('.')) {
+        str = str.replace(/\./g, '').replace(',', '.');
+      } else if (str.includes(',')) {
+        str = str.replace(',', '.');
+      }
+      return parseFloat(str) || 0;
+    }
+
     function fetchDataFromGoogle() {
       document.getElementById('statusText').innerText = "Veriler Çekiliyor...";
       document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
@@ -195,7 +207,7 @@
     function filterData() {
       const selectedYear = document.getElementById('yearSelect').value;
       
-      let filtered = allRecords;
+      let filtered = [...allRecords];
 
       if (selectedYear !== 'TUMU') {
         filtered = filtered.filter(r => String(r.date || r.period || '').includes(selectedYear));
@@ -208,6 +220,13 @@
           return d.includes(`-${monthIndex}-`) || d.toLowerCase().includes(currentSelectedMonth.toLowerCase());
         });
       }
+
+      // En yeni harcamalar en üstte olacak şekilde tarihe göre sıralama
+      filtered.sort((a, b) => {
+        const dA = a.date || a.period || '';
+        const dB = b.date || b.period || '';
+        return dB.localeCompare(dA);
+      });
 
       renderTable(filtered);
       calculateTotals(filtered, allRecords);
@@ -224,17 +243,21 @@
         const dateFormatted = formatDateTR(r.date);
         const desc = r.description || '-';
         const cat = r.category || 'Genel';
-        const credit = parseFloat(r.credit) || 0;
-        const cash = parseFloat(r.cash) || 0;
+        
+        const credit = parseNum(r.credit);
+        const cash = parseNum(r.cash);
         const total = credit + cash;
-        const method = credit > 0 ? 'Kart' : 'Nakit';
+        
+        // Kart tutarı varsa 'Kart', yoksa 'Nakit'
+        const isKart = credit > 0;
+        const method = isKart ? 'Kart' : 'Nakit';
 
         return `
           <tr class="hover:bg-slate-50 transition">
             <td class="p-3.5 font-semibold text-slate-800">${dateFormatted}</td>
             <td class="p-3.5 text-slate-900 font-semibold">${desc}</td>
             <td class="p-3.5"><span class="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md border border-slate-200">${cat}</span></td>
-            <td class="p-3.5 text-xs font-semibold ${credit > 0 ? 'text-blue-600' : 'text-emerald-600'}">${method}</td>
+            <td class="p-3.5 text-xs font-semibold ${isKart ? 'text-blue-600' : 'text-emerald-600'}">${method}</td>
             <td class="p-3.5 text-right font-bold text-slate-900">₺${total.toLocaleString('tr-TR', {minimumFractionDigits: 2})}</td>
           </tr>
         `;
@@ -247,8 +270,8 @@
       let nakitTotal = 0;
 
       records.forEach(r => {
-        const c = parseFloat(r.credit) || 0;
-        const n = parseFloat(r.cash) || 0;
+        const c = parseNum(r.credit);
+        const n = parseNum(r.cash);
         kartTotal += c;
         nakitTotal += n;
         seciliTotal += (c + n);
@@ -256,7 +279,7 @@
 
       let yearTotal = 0;
       all.forEach(r => {
-        yearTotal += (parseFloat(r.credit) || 0) + (parseFloat(r.cash) || 0);
+        yearTotal += parseNum(r.credit) + parseNum(r.cash);
       });
 
       document.getElementById('seciliDonemTutar').innerText = `₺${seciliTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
