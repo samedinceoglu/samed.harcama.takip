@@ -1,46 +1,57 @@
-const SPREADSHEET_ID = "1wwW48GDy5sssSMO1o7j1U_qBLiklfGU7og1lYd-2Duo"; // Harcama Takip Veritabanı ID
+const SPREADSHEET_ID = "1wwW48GDy5sssSMO1o7j1U_qBLiklfGU7og1lYd-2Duo";
+const SHEET_NAME = "Harcamalar";
 
-function doGet(e) {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle('Harcama Takip Uygulaması')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+function doGet() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sh = ss.getSheetByName(SHEET_NAME);
+    if (!sh) {
+      const names = ss.getSheets().map(s => s.getName()).join(", ");
+      return out({ error: "'" + SHEET_NAME + "' sekmesi bulunamadı. Mevcut sekmeler: " + names });
+    }
+    const tz = ss.getSpreadsheetTimeZone();
+    const values = sh.getDataRange().getValues();
+    const headers = values[0].map(h => String(h).trim().toLowerCase());
+
+    // Önce başlık adına bakar, bulamazsa eski sütun sırasına döner (B,C,D,E,I,N)
+    const col = (name, fallback) => {
+      const i = headers.indexOf(name);
+      return i >= 0 ? i : fallback;
+    };
+    const cPeriod = col("period", 1), cDate = col("date", 2), cDesc = col("description", 3),
+          cCat = col("category", 4), cCredit = col("credit", 8), cCash = col("cash", 13);
+
+    const fmtDate = (v, pattern) =>
+      v instanceof Date ? Utilities.formatDate(v, tz, pattern) : String(v === null ? "" : v);
+    const num = v => {
+      if (typeof v === "number") return v;
+      let s = String(v || "").replace(/[₺\s]/g, "");
+      if (s.indexOf(",") >= 0) s = s.replace(/\./g, "").replace(",", ".");
+      return parseFloat(s) || 0;
+    };
+
+    const records = [];
+    for (let i = 1; i < values.length; i++) {
+      const r = values[i];
+      const description = String(r[cDesc] || "").trim();
+      const date = fmtDate(r[cDate], "yyyy-MM-dd");
+      if (!description && !date) continue;
+      records.push({
+        period: fmtDate(r[cPeriod], "yyyy-MM"),
+        date: date,
+        description: description,
+        category: String(r[cCat] || ""),
+        credit: num(r[cCredit]),
+        cash: num(r[cCash])
+      });
+    }
+    return out({ ok: true, count: records.length, headers: headers, records: records });
+  } catch (err) {
+    return out({ error: String(err) });
+  }
 }
 
-function getVeriler() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('Sayfa1');
-  const data = sheet.getDataRange().getValues();
-  const headers = data.shift();
-  
-  return data.map((row, index) => ({
-    rowId: index + 2,
-    id: row[0],
-    period: row[1],
-    date: row[2],
-    description: row[3],
-    category: row[4],
-    credit: row[6] || 0,
-    cash: row[11] || 0,
-    detail: row[12] || ""
-  }));
-}
-
-function harcamaEkle(harcama) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('Sayfa1');
-  const id = 'custom-' + new Date().getTime();
-  sheet.appendRow([
-    id,
-    harcama.date.substring(0, 7),
-    harcama.date,
-    harcama.description,
-    harcama.category,
-    1,
-    harcama.credit || 0,
-    0, 0, 0, 0,
-    harcama.cash || 0,
-    harcama.detail || ""
-  ]);
-  return { status: "success", id: id };
+function out(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
