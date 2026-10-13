@@ -151,6 +151,13 @@
       filterData();
     }
 
+    function parseVal(cell) {
+      if (!cell) return '';
+      if (cell.f) return cell.f;
+      if (cell.v !== undefined && cell.v !== null) return cell.v;
+      return '';
+    }
+
     function fetchDataFromGoogle() {
       document.getElementById('statusText').innerText = "Veriler Çekiliyor...";
       document.getElementById('statusDot').className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
@@ -169,28 +176,30 @@
           const rows = response.table.rows;
           allRecords = [];
 
-          rows.forEach(r => {
-            if (!r.c) return;
+          rows.forEach((r, idx) => {
+            if (!r || !r.c) return;
 
-            const period = r.c[1] ? String(r.c[1].v || r.c[1].f || '') : '';
-            let date = '';
-            if (r.c[2]) {
-              date = r.c[2].f || String(r.c[2].v || '');
-              if (date.startsWith('Date(')) {
-                const parts = date.match(/\d+/g);
-                if (parts && parts.length >= 3) {
-                  const y = parts[0];
-                  const m = String(parseInt(parts[1]) + 1).padStart(2, '0');
-                  const d = String(parts[2]).padStart(2, '0');
-                  date = `${y}-${m}-${d}`;
-                }
+            const period = String(parseVal(r.c[1]));
+            let date = String(parseVal(r.c[2]));
+
+            if (date.startsWith('Date(')) {
+              const parts = date.match(/\d+/g);
+              if (parts && parts.length >= 3) {
+                const y = parts[0];
+                const m = String(parseInt(parts[1]) + 1).padStart(2, '0');
+                const d = String(parts[2]).padStart(2, '0');
+                date = `${y}-${m}-${d}`;
               }
             }
 
-            const description = r.c[3] ? String(r.c[3].v || '') : '';
-            const category = r.c[4] ? String(r.c[4].v || '') : '';
-            const credit = r.c[8] ? parseFloat(r.c[8].v || 0) : 0;
-            const cash = r.c[13] ? parseFloat(r.c[13].v || 0) : 0;
+            const description = String(parseVal(r.c[3]));
+            const category = String(parseVal(r.c[4]));
+            
+            const creditRaw = parseVal(r.c[8]);
+            const cashRaw = parseVal(r.c[13]);
+
+            const credit = parseFloat(String(creditRaw).replace(',', '.')) || 0;
+            const cash = parseFloat(String(cashRaw).replace(',', '.')) || 0;
 
             if (period || date || description) {
               allRecords.push({ period, date, description, category, credit, cash });
@@ -228,18 +237,21 @@
         const monthIndex = (aylar.indexOf(currentSelectedMonth)).toString().padStart(2, '0');
         filtered = filtered.filter(r => {
           const d = String(r.date || r.period || '');
-          return d.includes(`-${monthIndex}-`) || d.includes(currentSelectedMonth);
+          return d.includes(`-${monthIndex}-`) || d.toLowerCase().includes(currentSelectedMonth.toLowerCase());
         });
       }
 
-      renderTable(filtered);
-      calculateTotals(filtered, allRecords);
+      // Eğer filtreleme sonucunda kayıt sıfırlanıyorsa ham verilerin tamamını göster
+      const displayRecords = (filtered.length > 0 || allRecords.length === 0) ? filtered : allRecords;
+
+      renderTable(displayRecords);
+      calculateTotals(displayRecords, allRecords);
     }
 
     function renderTable(records) {
       const tbody = document.getElementById('tableBody');
       if (!records || records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Kayıt bulunamadı. Lütfen "Tüm Yıllar" veya "Tümü" seçeneğini kontrol edin.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Veritabanında kayıt bulunamadı.</td></tr>`;
         return;
       }
 
