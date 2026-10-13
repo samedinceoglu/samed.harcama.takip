@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // CORS Başlıkları
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -9,7 +8,6 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Sizin Gerçek Supabase Proje Adresiniz ve Anahtarınız
   const SUPABASE_URL = "https://xolniwgjhoeuyrvyrkme.supabase.co";
   const SUPABASE_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
 
@@ -19,15 +17,51 @@ export default async function handler(req, res) {
       body = JSON.parse(body);
     }
     
-    const { action } = body || {};
+    const { action, record, id } = body || {};
 
-    // Giriş Kontrolü
     if (action === "login") {
       return res.status(200).json({ ok: true });
     }
 
-    // Veri Çekme İşlemi (Gerek getBootstrapData gerek getData gelse bile çalışır)
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/harcamalar?select=*`, {
+    // Modül / Tablo Seçimi
+    let targetTable = "harcamalar";
+    if (action && action.toLowerCase().includes("income")) targetTable = "gelirler";
+    if (action && action.toLowerCase().includes("debt")) targetTable = "borclar";
+    if (action && action.toLowerCase().includes("upcoming")) targetTable = "yaklasan_odemeler";
+    if (action && action.toLowerCase().includes("asset")) targetTable = "varlik_borc";
+
+    // 1. VERİ SİLME
+    if (action && action.startsWith("delete")) {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/${targetTable}?id=eq.${id}`, {
+        method: "DELETE",
+        headers: { 
+          "apikey": SUPABASE_KEY, 
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Prefer": "return=representation" 
+        }
+      });
+      const data = await response.json();
+      return res.status(200).json({ ok: true, data });
+    }
+
+    // 2. YENİ KAYIT EKLEME
+    if (action && action.startsWith("save")) {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/${targetTable}`, {
+        method: "POST",
+        headers: { 
+          "apikey": SUPABASE_KEY, 
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+          "Prefer": "return=representation" 
+        },
+        body: JSON.stringify(record)
+      });
+      const data = await response.json();
+      return res.status(200).json({ ok: true, data });
+    }
+
+    // 3. VERİ OKUMA (GET)
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${targetTable}?select=*`, {
       method: "GET",
       headers: { 
         "apikey": SUPABASE_KEY, 
@@ -42,7 +76,7 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-    return res.status(200).json({ ok: true, data: data });
+    return res.status(200).json({ ok: true, data });
 
   } catch (error) {
     return res.status(500).json({ ok: false, message: error.toString() });
