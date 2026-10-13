@@ -179,30 +179,39 @@
           rows.forEach((r) => {
             if (!r || !r.c) return;
 
-            // Sabit Sütun Pozisyonları (Harcama Takip Veritabanı Yapısına Göre)
-            const period = String(parseVal(r.c[1])); // Period (B Sütunu)
-            let date = String(parseVal(r.c[2]));     // Date (C Sütunu)
+            // Hücre alanlarını güvenli oku
+            let period = '';
+            let date = '';
+            let description = '';
+            let category = '';
+            let credit = 0;
+            let cash = 0;
 
-            if (date.startsWith('Date(')) {
-              const parts = date.match(/\d+/g);
-              if (parts && parts.length >= 3) {
-                const y = parts[0];
-                const m = String(parseInt(parts[1]) + 1).padStart(2, '0');
-                const d = String(parts[2]).padStart(2, '0');
-                date = `${y}-${m}-${d}`;
+            // Tüm sütunları gezerek verileri eşleştir
+            r.c.forEach((cell, idx) => {
+              const val = String(parseVal(cell));
+              if (!val) return;
+
+              if (idx === 1) period = val;
+              else if (idx === 2) {
+                date = val;
+                if (date.startsWith('Date(')) {
+                  const parts = date.match(/\d+/g);
+                  if (parts && parts.length >= 3) {
+                    const y = parts[0];
+                    const m = String(parseInt(parts[1]) + 1).padStart(2, '0');
+                    const d = String(parts[2]).padStart(2, '0');
+                    date = `${y}-${m}-${d}`;
+                  }
+                }
               }
-            }
+              else if (idx === 3) description = val;
+              else if (idx === 4) category = val;
+              else if (idx === 8) credit = parseFloat(val.replace(',', '.')) || 0;
+              else if (idx === 13) cash = parseFloat(val.replace(',', '.')) || 0;
+            });
 
-            const description = String(parseVal(r.c[3])); // Description (D Sütunu)
-            const category = String(parseVal(r.c[4]));    // Category (E Sütunu)
-            
-            const creditRaw = parseVal(r.c[8]);             // Credit (I Sütunu)
-            const cashRaw = parseVal(r.c[13]);              // Cash (N Sütunu)
-
-            const credit = parseFloat(String(creditRaw).replace(',', '.')) || 0;
-            const cash = parseFloat(String(cashRaw).replace(',', '.')) || 0;
-
-            // Başlık satırı hariç gerçek harcamaları listeye ekle
+            // Başlık satırı hariç verileri ekle
             if ((description || date || period) && description.toLowerCase() !== 'description') {
               allRecords.push({ period, date, description, category, credit, cash });
             }
@@ -214,6 +223,7 @@
         filterData();
       };
 
+      // Tq sorgusu doğrudan JSON olarak tetikleniyor
       const script = document.createElement('script');
       script.id = 'gvizScript';
       script.src = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json`;
@@ -250,7 +260,7 @@
     function renderTable(records) {
       const tbody = document.getElementById('tableBody');
       if (!records || records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Seçili filtreye ait kayıt bulunamadı. Lütfen "Tüm Yıllar" veya "Tümü" seçeneğini kontrol edin.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Seçili filtreye ait harcama kaydı bulunamadı. Lütfen "Tüm Yıllar" veya "Tümü" seçeneğini seçin.</td></tr>`;
         return;
       }
 
