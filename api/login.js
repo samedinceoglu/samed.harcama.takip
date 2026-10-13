@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   }
 
   // Sizin Gerçek ve Canlı Supabase Veritabanı Bağlantınız
-  const SUPABASE_URL = "https://supabase.co";
+ const SUPABASE_URL = "https://xolniwgjhoeuyrvyrkme.supabase.co";
   const SUPABASE_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
 
   try {
