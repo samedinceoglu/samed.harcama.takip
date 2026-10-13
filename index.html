@@ -110,7 +110,6 @@
         <table class="w-full text-left text-sm">
           <thead class="bg-slate-100 text-slate-600 text-xs font-bold uppercase sticky top-0 border-b border-slate-200">
             <tr>
-              <th class="p-3.5">Ekstre</th>
               <th class="p-3.5">Tarih</th>
               <th class="p-3.5">Harcama / Açıklama</th>
               <th class="p-3.5">Kategori</th>
@@ -120,7 +119,7 @@
           </thead>
           <tbody id="tableBody" class="divide-y divide-slate-200 text-slate-700">
             <tr>
-              <td colspan="6" class="p-8 text-center text-slate-500">
+              <td colspan="5" class="p-8 text-center text-slate-500">
                 <i class="fa-solid fa-circle-notch fa-spin text-2xl text-blue-600 mb-2"></i>
                 <p class="font-medium">Google Veritabanından Veriler Çekiliyor...</p>
               </td>
@@ -133,7 +132,6 @@
   </div>
 
   <script>
-    // Aldığımız canlı Google Script URL'si
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwzkt3UBRgVb-Wf6Kbef0dU13v25b0UimuZcUBDLHSzy9Ptq0DzNIro2Kv4vzrMFN7Z/exec";
     const aylar = ["Tümü", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
     let currentSelectedMonth = "Tümü";
@@ -150,6 +148,17 @@
       currentSelectedMonth = m;
       renderMonthButtons();
       filterData();
+    }
+
+    // Tarihi GG.AA.YYYY formatına çevirir
+    function formatDateTR(dateStr) {
+      if (!dateStr || dateStr === '-') return '-';
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        // YYYY-MM-DD -> DD.MM.YYYY
+        return `${parts[2]}.${parts[1]}.${parts[0]}`;
+      }
+      return dateStr;
     }
 
     function fetchDataFromGoogle() {
@@ -209,13 +218,12 @@
     function renderTable(records) {
       const tbody = document.getElementById('tableBody');
       if (!records || records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Seçili filtreye ait kayıt bulunamadı. Lütfen "Tüm Yıllar" veya "Tümü" seçeneğini kontrol edin.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Seçili filtreye ait kayıt bulunamadı. Lütfen "Tüm Yıllar" veya "Tümü" seçeneğini kontrol edin.</td></tr>`;
         return;
       }
 
       tbody.innerHTML = records.map(r => {
-        const date = r.date || '-';
-        const period = r.period || (String(date).length >= 7 ? String(date).substring(0, 7) : '-');
+        const dateFormatted = formatDateTR(r.date);
         const desc = r.description || '-';
         const cat = r.category || 'Genel';
         const credit = parseFloat(r.credit) || 0;
@@ -225,8 +233,7 @@
 
         return `
           <tr class="hover:bg-slate-50 transition">
-            <td class="p-3.5 text-slate-500 text-xs font-mono">${period}</td>
-            <td class="p-3.5 font-medium text-slate-800">${date}</td>
+            <td class="p-3.5 font-semibold text-slate-800">${dateFormatted}</td>
             <td class="p-3.5 text-slate-900 font-semibold">${desc}</td>
             <td class="p-3.5"><span class="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-md border border-slate-200">${cat}</span></td>
             <td class="p-3.5 text-xs font-semibold ${credit > 0 ? 'text-blue-600' : 'text-emerald-600'}">${method}</td>
@@ -254,20 +261,4 @@
         yearTotal += (parseFloat(r.credit) || 0) + (parseFloat(r.cash) || 0);
       });
 
-      document.getElementById('seciliDonemTutar').innerText = `₺${seciliTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
-      document.getElementById('seciliDonemAdet').innerText = `${records.length} kayıt`;
-      document.getElementById('kartToplamTutar').innerText = `₺${kartTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
-      document.getElementById('nakitToplamTutar').innerText = `₺${nakitTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
-      document.getElementById('yilToplamTutar').innerText = `₺${yearTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2})}`;
-    }
-
-    function switchMainTab(tab) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
-    }
-
-    renderMonthButtons();
-    fetchDataFromGoogle();
-  </script>
-</body>
-</html>
+      document.getElementById('seciliDonemTutar').innerText =
