@@ -18,27 +18,10 @@ export default async function handler(req, res) {
     }
     
     const { action } = body || {};
-
     if (action === "login") {
       return res.status(200).json({ ok: true });
     }
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/harcamalar?select=*`, {
-      method: "GET",
-      headers: { 
-        "apikey": SUPABASE_KEY, 
-        "Authorization": `Bearer ${SUPABASE_KEY}`,
-        "Accept": "application/json"
-      }
-    });
-
-    const data = await response.json();
-    return res.status(200).json({ ok: true, data: data });
-
-  } catch (error) {
-    return res.status(500).json({ ok: false, message: error.toString() });
-  }
-}
     const response = await fetch(`${SUPABASE_URL}/rest/v1/harcamalar?select=*`, {
       method: "GET",
       headers: { 
