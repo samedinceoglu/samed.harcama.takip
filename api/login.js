@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // CORS Başlıkları
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -8,8 +9,8 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Sizin Gerçek ve Canlı Supabase Veritabanı Bağlantınız
- const SUPABASE_URL = "https://xolniwgjhoeuyrvyrkme.supabase.co";
+  // Sizin Gerçek Supabase Proje Adresiniz ve Anahtarınız
+  const SUPABASE_URL = "https://xolniwgjhoeuyrvyrkme.supabase.co";
   const SUPABASE_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
 
   try {
@@ -20,10 +21,12 @@ export default async function handler(req, res) {
     
     const { action } = body || {};
 
-    if (!action || action === "login") {
-      if (action === "login") return res.status(200).json({ ok: true });
+    // Giriş Kontrolü
+    if (action === "login") {
+      return res.status(200).json({ ok: true });
     }
 
+    // Veri Çekme İşlemi (Gerek getBootstrapData gerek getData gelse bile çalışır)
     const response = await fetch(`${SUPABASE_URL}/rest/v1/harcamalar?select=*`, {
       method: "GET",
       headers: { 
@@ -32,6 +35,11 @@ export default async function handler(req, res) {
         "Accept": "application/json"
       }
     });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).json({ ok: false, message: errText });
+    }
 
     const data = await response.json();
     return res.status(200).json({ ok: true, data: data });
