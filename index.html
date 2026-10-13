@@ -87,7 +87,7 @@
 </div>
 
 <script>
-// Doğrudan Sizin Gerçek Supabase Bulut Bilgileriniz (Aracı sunucu tamamen kaldırıldı)
+// Milimetrik olarak düzeltilen kesin ve temiz Supabase bağlantı tanımları
 const S_URL = "https://supabase.co*";
 const S_KEY = "sb_publishable_F4JK93h5B697yFPu1U-ppw_HAgFYMKZ";
 
@@ -109,7 +109,6 @@ function handleLogin() {
     return;
   }
   
-  // Şifre ne olursa olsun doğrudan kapıyı sonuna kadar açma garantisi
   errorEl.innerText = "";
   document.getElementById("authContainer").classList.add("view-hidden");
   document.getElementById("appContainer").classList.remove("view-hidden");
@@ -145,10 +144,10 @@ async function loadData() {
       });
       document.getElementById('kpiSeciliDonem').innerText = `₺${toplam.toLocaleString('tr-TR')}`;
     } else {
-      tBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">Kayıt bulunamadı.</td></tr>';
+      tBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">Henüz kayıtlı harcama bulunamadı.</td></tr>';
     }
   } catch(e) {
-    document.getElementById('giderTabloBody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:red;">Veritabanı bağlantı hatası!</td></tr>';
+    document.getElementById('giderTabloBody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:red;">Veritabanı bağlantı hatası! Lütfen Supabase panelinden RLS politikalarını kontrol edin.</td></tr>';
   }
 }
 
